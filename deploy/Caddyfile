@@ -1,0 +1,17 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:8080 {
+	reverse_proxy gateway:8080 {
+		# Flush streaming responses immediately; no application retry policy here.
+		flush_interval -1
+	}
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+}

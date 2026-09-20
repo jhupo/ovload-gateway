@@ -1,0 +1,16 @@
+name: Bug report
+description: Report a reproducible defect without credentials or private prompts.
+labels: [bug]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include version, platform, steps, expected behavior, and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      description: Remove credentials, cookies, account identifiers, and private payloads.

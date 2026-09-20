@@ -1,0 +1,4 @@
+@import '@fontsource-variable/inter/wght.css';
+@import '@fontsource-variable/noto-sans-sc/index.css';
+:root{--font-ui:'Inter Variable','Noto Sans SC Variable',system-ui,sans-serif;--text-xs:12px;--text-sm:13px;--text-body:14px;--text-section:18px;--text-dialog:20px;--text-page:30px;--icon-sm:14px;--icon-default:16px;--icon-nav:18px;--control-sm:32px;--control-md:36px;--control-lg:40px}
+html{font-family:var(--font-ui);font-synthesis:none;-webkit-font-smoothing:antialiased}button,input,textarea,select{font-family:inherit}body{font-weight:400}

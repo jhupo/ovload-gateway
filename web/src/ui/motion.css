@@ -1,0 +1,19 @@
+/* Shared motion contract: public pages and development catalog. */
+:root{--ease-surface:cubic-bezier(.22,1,.36,1);--duration-page:320ms;--duration-reveal:750ms}
+.sweep-button,.p-button.sweep-button{position:relative;isolation:isolate;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:20px;border:1px solid transparent;border-radius:12px;padding:13px 20px;background:var(--text);color:var(--surface);font-size:14px;font-weight:500;transition:box-shadow 240ms var(--ease-surface)}
+.sweep-button::before{content:'';position:absolute;inset:0;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform 440ms var(--ease-surface);z-index:-1}
+.sweep-button:hover::before,.sweep-button:focus-visible::before,.sweep-button:active::before{transform:scaleX(1)}
+.sweep-button:hover,.sweep-button:focus-visible{color:white}.sweep-button:disabled::before{display:none}
+.sweep-button svg{transition:transform 320ms var(--ease-surface);flex-shrink:0}.sweep-button:hover svg{transform:translateX(3px)}
+.page-enter-active,.page-leave-active{transition:opacity var(--duration-page),transform var(--duration-page) var(--ease-surface)}
+.page-enter-from{opacity:0;transform:translateY(15px)}.page-leave-to{opacity:0;transform:translateY(-8px)}
+[data-reveal]{transition:opacity var(--duration-reveal) var(--ease-surface),transform var(--duration-reveal) var(--ease-surface)}
+.reveal-pending{opacity:0;transform:perspective(1200px) translateY(35px) rotateX(5deg);transform-origin:center bottom}
+.reveal-pending.is-revealed,.reveal-pending:focus-within{opacity:1;transform:none}
+.p-dialog-mask{perspective:1400px;backdrop-filter:blur(12px);background:rgb(25 28 33 / 22%)}
+.p-dialog-enter-active{transition:opacity 300ms,transform 480ms var(--ease-surface)!important;transform-origin:50% 85%}
+.p-dialog-enter-from{opacity:0;transform:perspective(1200px) translateY(26px) rotateX(12deg) scale(.97)!important}
+.p-dialog-leave-active{transition:opacity 170ms,transform 170ms!important}.p-dialog-leave-to{opacity:0;transform:translateY(8px) scale(.98)!important}
+@keyframes login-arrive{from{opacity:0;transform:perspective(1200px) translateY(28px) rotateX(8deg)}to{opacity:1;transform:none}}
+.login-arrival{animation:login-arrive 950ms var(--ease-surface) both;animation-delay:120ms;transform-origin:50% 80%}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.reveal-pending{opacity:1;transform:none}.route-particle{display:none}.page-enter-from,.page-leave-to,.p-dialog-enter-from{transform:none!important}.sweep-button svg{transform:none!important}}

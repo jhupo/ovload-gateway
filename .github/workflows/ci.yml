@@ -1,0 +1,139 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  repository:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/version.py check
+      - run: python scripts/check_reports.py
+      - run: python -m unittest discover -s tests/tooling -v
+      - run: git diff --check
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: false
+      - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - run: actionlint
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.0'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - run: cargo test --locked --workspace
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.0'
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm --dir web install --frozen-lockfile
+      - run: pnpm --dir web lint
+      - run: pnpm --dir web build
+      - run: pnpm --dir web exec playwright install --with-deps chromium
+      - run: pnpm --dir web test:e2e
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and test deployment without publishing
+        env:
+          OVLOAD_VERSION: ci
+          POSTGRES_PASSWORD: ci-disposable-only
+        run: |
+          docker compose -f deploy/compose.yml -f deploy/compose.build.yml config --quiet
+          docker compose -f deploy/compose.yml -f deploy/compose.build.yml build
+          docker compose -f deploy/compose.yml -f deploy/compose.build.yml up -d --wait --wait-timeout 120
+          docker compose -f deploy/compose.yml exec -T caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          curl --fail http://127.0.0.1:8080/healthz
+          curl --fail http://127.0.0.1:8080/readyz
+          curl --fail http://127.0.0.1:8080/ | grep -q 'Ovload Gateway'
+          caddy_before=$(docker compose -f deploy/compose.yml ps -q caddy)
+          pg_before=$(docker compose -f deploy/compose.yml ps -q postgres)
+          redis_before=$(docker compose -f deploy/compose.yml ps -q redis)
+          docker compose -f deploy/compose.yml up -d --no-deps --force-recreate --wait gateway
+          test "$caddy_before" = "$(docker compose -f deploy/compose.yml ps -q caddy)"
+          test "$pg_before" = "$(docker compose -f deploy/compose.yml ps -q postgres)"
+          test "$redis_before" = "$(docker compose -f deploy/compose.yml ps -q redis)"
+          curl --fail http://127.0.0.1:8080/readyz
+      - name: Scan images
+        run: |
+          for image in ghcr.io/jhupo/ovload-gateway:ci; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.61.1 image --exit-code 1 --severity HIGH,CRITICAL "$image"
+          done
+      - name: Diagnostics and cleanup
+        if: always()
+        env:
+          OVLOAD_VERSION: ci
+          POSTGRES_PASSWORD: ci-disposable-only
+        run: |
+          docker compose -f deploy/compose.yml logs --no-color --tail=100
+          docker compose -f deploy/compose.yml down --remove-orphans
+
+  storage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17.9-bookworm
+        env:
+          POSTGRES_USER: ovload
+          POSTGRES_PASSWORD: ci-disposable-only
+          POSTGRES_DB: ovload_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U ovload -d ovload_test" --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.0'
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked -p ovload-server --test storage_contract -- --ignored
+        env:
+          OVLOAD_TEST_DATABASE_URL: postgres://ovload:ci-disposable-only@localhost:5432/ovload_test

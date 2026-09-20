@@ -1,0 +1,35 @@
+{
+  "imported_at": "2026-09-19",
+  "files": [
+    {
+      "file": "CODEX_TRANSPORT_CAPTURE_2026-09-17.zh-CN.md",
+      "source": "sub2api/docs/CODEX_TRANSPORT_CAPTURE_2026-09-17.zh-CN.md",
+      "sha256": "2cf1fb78328e385086b28c739f74cd358233d9951ad36ef949e54eca8389a040"
+    },
+    {
+      "file": "CODEX_IDENTITY_CURRENT_GAP_ANALYSIS_2026-09-17.zh-CN.md",
+      "source": "sub2api/docs/CODEX_IDENTITY_CURRENT_GAP_ANALYSIS_2026-09-17.zh-CN.md",
+      "sha256": "a651ee817f1ce9edbcf7e0cc00d1c8d2b8c67a8f20914d232179d15e6e2cf86c"
+    },
+    {
+      "file": "CODEX_IDENTITY_EGRESS_PLAN.zh-CN.md",
+      "source": "sub2api/docs/CODEX_IDENTITY_EGRESS_PLAN.zh-CN.md",
+      "sha256": "ee92a8303603029b4091b33c70a2a7aad0026d68eb6d11396603e40f5f1fabda"
+    },
+    {
+      "file": "CODEX_IDENTITY_REFACTOR_PLAN_2026-09-17.zh-CN.md",
+      "source": "sub2api/docs/CODEX_IDENTITY_REFACTOR_PLAN_2026-09-17.zh-CN.md",
+      "sha256": "6f680c50ce88c70ce2322f66e62d9fa29b9d4803e77e09901098482d0ce9ae54"
+    },
+    {
+      "file": "CODEX_OUTBOUND_IDENTITY.md",
+      "source": "sub2api/docs/CODEX_OUTBOUND_IDENTITY.md",
+      "sha256": "0438e347a9f55362a64a6b1d7a5166e2dd351d348c7e05e43d9dbe5f6a226d2a"
+    },
+    {
+      "file": "WS_IDENTITY_REUSE_REVIEW.md",
+      "source": "sub2api/docs/WS_IDENTITY_REUSE_REVIEW.md",
+      "sha256": "46405904cb80b4b508265df268f7ae1bbed96f43896e94b969b3ea3690642365"
+    }
+  ]
+}

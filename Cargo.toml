@@ -1,0 +1,17 @@
+[workspace]
+members = ["crates/ovload-core", "crates/ovload-server"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "LGPL-3.0-only"
+repository = "https://github.com/jhupo/ovload-gateway"
+
+[workspace.dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ovload-core = { path = "crates/ovload-core" }

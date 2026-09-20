@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary
+reports/source-archive/** whitespace=-blank-at-eol

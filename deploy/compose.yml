@@ -1,0 +1,82 @@
+name: ovload-gateway
+services:
+  gateway:
+    image: ${OVLOAD_IMAGE_PREFIX:-ghcr.io/jhupo/ovload-gateway}:${OVLOAD_VERSION:?Set OVLOAD_VERSION}
+    restart: unless-stopped
+    environment:
+      OVLOAD_LISTEN: 0.0.0.0:8080
+      OVLOAD_WEB_DIR: /app/web
+      DATABASE_URL: postgres://ovload:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/ovload
+      REDIS_URL: redis://redis:6379/0
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [edge, data]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    logging: &logging
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2.10.2-alpine}
+    restart: unless-stopped
+    user: '10001:10001'
+    command: [caddy, run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+    ports: ['${OVLOAD_BIND:-127.0.0.1}:${OVLOAD_PORT:-8080}:8080']
+    depends_on:
+      gateway: {condition: service_healthy}
+    volumes: ['./Caddyfile:/etc/caddy/Caddyfile:ro']
+    networks: [edge]
+    read_only: true
+    tmpfs: ['/tmp:uid=10001,gid=10001', '/data:uid=10001,gid=10001', '/config:uid=10001,gid=10001']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:17.9-bookworm}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ovload
+      POSTGRES_USER: ovload
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U ovload -d ovload']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+  redis:
+    image: ${REDIS_IMAGE:-redis:7.4.8-bookworm}
+    restart: unless-stopped
+    user: redis
+    command: [redis-server, --appendonly, 'yes', --maxmemory, 256mb, --maxmemory-policy, noeviction]
+    volumes: [redis-data:/data]
+    networks: [data]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+networks:
+  edge:
+  data: {internal: true}
+volumes:
+  postgres-data:
+  redis-data:
