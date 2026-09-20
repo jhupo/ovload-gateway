@@ -707,3 +707,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Repository-local agent skills
+
+The skills under `.agents/skills/design-taste-frontend`,
+`.agents/skills/find-skills`, `.agents/skills/frontend-design`, and
+`.agents/skills/web-design-guidelines` were copied from
+https://github.com/openvetta/open-vetta/tree/main/.agents/skills on 2026-09-20.
+They are distributed under the upstream repository's Apache-2.0 terms. The
+`frontend-design` skill includes its upstream `LICENSE.txt`; retain it when
+redistributing that skill. A copy of the same upstream terms is also available
+as `.agents/skills/OPEN_VETTA_LICENSE.txt` for the imported skill set.
+
+GSAP guidance remains installed in the developer's local Codex skills directory
+and is not vendored into this repository. The GSAP runtime package license and
+attribution remain documented in the UI dependency section above.

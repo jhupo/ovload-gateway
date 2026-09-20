@@ -7,7 +7,6 @@ concepts with sample data and local interactions; no business writes are enabled
 ## Preview routes
 - / — home
 - /login — sign-in presentation, authentication unavailable
-- /test.html — component catalog (development only)
 - /preview.html?view=user — user concept (development only)
 - /preview.html?view=admin — administration concept (development only)
 

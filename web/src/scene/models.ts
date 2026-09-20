@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 
 export type LayerId = 'room' | 'desk' | 'character' | 'laptop' | 'screen' | 'hands' | 'flow'
 export interface Cloud {
@@ -12,6 +13,7 @@ export interface Cloud {
   lines: number[]
   closedLines: number[]
   neutral: boolean
+  occluders: THREE.BufferGeometry[]
 }
 
 let seed = 71339
@@ -24,7 +26,7 @@ class Model {
   cloud: Cloud
   transform = new THREE.Matrix4()
   constructor(layer: LayerId, neutral = false) {
-    this.cloud = { layer, positions: [], closed: [], normals: [], closedNormals: [], colors: [], lines: [], closedLines: [], neutral }
+    this.cloud = { layer, positions: [], closed: [], normals: [], closedNormals: [], colors: [], lines: [], closedLines: [], neutral, occluders: [] }
   }
   point(position: THREE.Vector3, normal: THREE.Vector3, color: THREE.Color, closed = position, closedNormal = normal) {
     this.cloud.positions.push(...position.clone().applyMatrix4(this.transform).toArray())
@@ -45,6 +47,18 @@ class Model {
     mesh.scale.fromArray(scale)
     mesh.rotation.set(rotation[0]!, rotation[1]!, rotation[2]!)
     mesh.updateMatrixWorld()
+    if (count >= 1000 && ['character', 'desk', 'laptop'].includes(this.cloud.layer)) {
+      // Invisible inset surfaces stop the desk, fingers and chair showing through
+      // each other. The visible surface still consists entirely of particles.
+      const occluder = geometry.clone()
+      const positions = occluder.getAttribute('position'), normals = occluder.getAttribute('normal')
+      for (let i = 0; i < positions.count; i++) {
+        positions.setXYZ(i, positions.getX(i) - normals.getX(i) * .009,
+          positions.getY(i) - normals.getY(i) * .009, positions.getZ(i) - normals.getZ(i) * .009)
+      }
+      occluder.applyMatrix4(mesh.matrixWorld).applyMatrix4(this.transform)
+      this.cloud.occluders.push(occluder)
+    }
     const sampler = new MeshSurfaceSampler(mesh).setRandomGenerator(random).build()
     const p = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color(color)
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld)
@@ -74,33 +88,39 @@ class Model {
 function room() {
   const m = new Model('room')
   // The window is directly in front of the programmer, at negative Z.
-  m.box([0, 2.72, -2.15], [3.25, 3.0, .07], '#c4deeb', 1300)
+  m.box([0, 2.58, -2.15], [4.08, 2.08, .07], '#c4deeb', 1450)
   const frame = '#8b9ead'
-  for (const x of [-1.7, 0, 1.7]) m.box([x, 2.72, -2.02], [.075, 3.25, .12], frame, 360)
-  for (const y of [1.1, 2.55, 4.35]) m.box([0, y, -2.02], [3.5, .075, .12], frame, 400)
-  m.box([0, 1.07, -1.88], [3.72, .12, .45], '#c9b69e', 850)
+  for (const x of [-2.08, -.69, .69, 2.08]) m.box([x, 2.58, -2.02], [.065, 2.30, .11], frame, 250)
+  for (const y of [1.43, 2.56, 3.73]) m.box([0, y, -2.02], [4.28, .065, .11], frame, 440)
+  m.box([0, 1.38, -1.88], [4.48, .11, .38], '#78909e', 870)
   // Quiet exterior shapes and a warm daylight disk, all sampled 3D geometry.
-  m.ellipsoid([.94, 3.72, -2.19], [.28, .28, .025], '#f0c77e', 420)
-  for (const [x, h] of [[-1.1, .55], [-.58, .82], [.23, .42], [.9, .63]]) {
-    m.box([x!, 1.2 + h! / 2, -2.22], [.42, h!, .06], '#a9c3d0', 130)
+  m.ellipsoid([.78, 3.33, -2.19], [.22, .22, .025], '#f0c77e', 300)
+  for (const [x, h] of [[-1.58, .44], [-.92, .64], [-.18, .34], [.58, .49], [1.31, .57]]) {
+    m.box([x!, 1.43 + h! / 2, -2.22], [.34, h!, .06], '#a9c3d0', 105)
   }
   // Floor boundary describes a room without a tech grid or opaque ground plane.
-  for (let i = 0; i < 850; i++) {
-    const x = (random() - .5) * 5.7, z = (random() - .5) * 4.5
-    m.point(new THREE.Vector3(x, -.07, z), new THREE.Vector3(0, 1, 0), new THREE.Color('#b5a793'))
+  for (let i = 0; i < 2800; i++) {
+    const angle = random() * Math.PI * 2
+    const raggedEdge = .86 + Math.sin(angle * 3 + .7) * .08 + Math.sin(angle * 7) * .035
+    const radius = Math.pow(random(), .61) * 5.45 * raggedEdge
+    const x = Math.cos(angle) * radius
+    const z = Math.sin(angle) * radius * .62
+    const distance = Math.min(1, radius / 5.45)
+    const color = new THREE.Color().lerpColors(new THREE.Color('#ad9f8d'), new THREE.Color('#718b9a'), distance * .46)
+    m.point(new THREE.Vector3(x, -.07 + (random() - .5) * .035, z), new THREE.Vector3(0, 1, 0), color)
   }
   return m.cloud
 }
 
 function desk() {
   const m = new Model('desk')
-  m.box([0, 1.40, -.60], [2.65, .13, 1.13], '#d49962', 2500)
+  m.box([0, 1.36, -.60], [2.65, .13, 1.13], '#607681', 2500)
   for (const x of [-1.13, 1.13]) for (const z of [-1.00, -.17]) {
     m.segment([x, .04, z], [x, 1.34, z], .035, '#516476', 240)
   }
   // Chair stays with the furniture group so the character can be inspected alone.
-  m.box([0, .86, .76], [.94, .13, .79], '#d6b48d', 800)
-  m.surface(new THREE.CapsuleGeometry(.43, .47, 8, 20), '#d6b48d', 950, [0, 1.27, 1.10], [1, .74, .18], [0, 0, 0])
+  m.box([-.18, .86, .49], [.88, .13, .72], '#3d5059', 1500)
+  m.surface(new THREE.CapsuleGeometry(.40, .36, 8, 24), '#526b78', 3100, [-.18, 1.14, .84], [1, .70, .20], [0, 0, 0])
   for (const x of [-.33, .33]) for (const z of [.49, 1.0]) {
     m.segment([x * 1.2, .05, z + .04], [x, .83, z], .033, '#667c85', 180)
   }
@@ -109,47 +129,77 @@ function desk() {
 
 function character() {
   const m = new Model('character')
-  const blue = '#5280ed', denim = '#383e77', skin = '#efb386', hair = '#26272d'
+  m.transform.makeTranslation(-.18,0,0)
+  const blue = '#4e71ba', sleeve = '#3d5b9a', denim = '#303f55', skin = '#dba27c', hair = '#26323b'
+  const stroke = (points: number[][], closed = false, samples = 36) => {
+    const curve = new THREE.CatmullRomCurve3(points.map(point => new THREE.Vector3().fromArray(point)), closed, 'centripetal')
+    const vertices = curve.getPoints(samples)
+    for (let index = 0; index < vertices.length - 1; index++) m.line(vertices[index]!, vertices[index + 1]!)
+  }
   // Broad shoulders and a curved back make the rear view immediately readable.
-  const profile: THREE.Vector2[] = [[.28, 0], [.43, .08], [.50, .34], [.53, .62], [.46, .80], [.25, .96]].map(([r, y]) => new THREE.Vector2(r, y))
-  m.surface(new THREE.LatheGeometry(profile, 40), blue, 3600, [0, 1.02, .58], [1.06, 1, .58], [-.12, 0, 0])
-  m.segment([0, 1.91, .43], [0, 2.10, .40], .12, skin, 260)
+  const profile: THREE.Vector2[] = [[.31, 0], [.41, .10], [.45, .35], [.49, .67], [.44, .88], [.25, 1.03]].map(([r, y]) => new THREE.Vector2(r, y))
+  m.surface(new THREE.LatheGeometry(profile, 48), blue, 12000, [0, 1.00, .32], [1.03, 1, .63], [-.14, 0, 0])
+  m.segment([0, 1.97, .18], [0, 2.14, .13], .12, skin, 480)
   // Only the back of the head is modeled. No facial surface can show through.
-  m.ellipsoid([0, 2.34, .43], [.37, .41, .35], hair, 2500)
-  for (const [x, y, z, r] of [[-.24, 2.60, .47, .14], [-.07, 2.69, .44, .17], [.13, 2.65, .40, .16], [.27, 2.51, .45, .12]]) {
+  m.ellipsoid([0, 2.36, .14], [.34, .38, .32], hair, 9000)
+  m.ellipsoid([0, 2.15, .24], [.23, .16, .23], '#202c33', 800)
+  for (const side of [-1, 1]) {
+    m.ellipsoid([side * .324, 2.31, .12], [.044, .078, .047], skin, 260)
+    m.ellipsoid([side * .342, 2.31, .146], [.015, .043, .019], '#a97052', 95)
+  }
+  for (const [x, y, z, r] of [[-.22, 2.60, .19, .13], [-.06, 2.68, .17, .16], [.13, 2.62, .13, .15], [.26, 2.50, .15, .11]]) {
     m.ellipsoid([x!, y!, z!], [r!, r! * .72, r! * .9], hair, 210)
   }
-  m.surface(new THREE.TorusGeometry(.29, .052, 8, 36), '#f1a365', 430, [0, 1.98, .49], [1, .72, 1], [Math.PI / 2, 0, 0])
+  // Stable silhouette fibers keep the rear-view pose readable between particles.
+  stroke([[-.44, 1.86, .52], [-.24, 1.92, .62], [0, 1.91, .65], [.24, 1.92, .62], [.44, 1.86, .52]], false, 36)
+  stroke([[-.36, 1.12, .57], [-.16, 1.10, .60], [.16, 1.10, .60], [.36, 1.12, .57]], false, 30)
+  // A folded hood makes the back unambiguous; no front zipper or circular face outline.
+  m.surface(new THREE.TorusGeometry(.23, .056, 10, 36, Math.PI * 1.65), '#7898d2', 1000, [0, 1.86, .61], [1, .72, .55], [0, 0, .22 * Math.PI])
   for (const side of [-1, 1]) {
-    const shoulder = [side * .46, 1.74, .48], elbow = [side * .64, 1.43, .20], wrist = [side * .31, 1.49, -.47]
-    m.segment(shoulder, elbow, .175, blue, 880, .145)
-    m.ellipsoid(elbow, [.145, .155, .15], blue, 270)
-    m.segment(elbow, wrist, .132, blue, 930, .10)
-    m.ellipsoid([side * .28, 1.49, -.61], [.12, .045, .12], skin, 300)
-    // Small typing fingers; the large gathering hands are a different group.
-    for (let j = 0; j < 4; j++) m.segment([side * .28 + (j - 1.5) * .039, 1.50, -.67], [side * .28 + (j - 1.5) * .039, 1.49, -.78], .017, skin, 32)
-    m.segment([side * .22, 1.01, .53], [side * .25, .73, .04], .18, denim, 850, .15)
-    m.segment([side * .25, .73, .04], [side * .27, .20, -.35], .135, denim, 760, .10)
-    m.ellipsoid([side * .27, .12, -.52], [.15, .10, .27], '#eee4d3', 420)
-    m.box([side * .27, .055, -.52], [.28, .04, .43], '#f18e59', 180)
+    const shoulder = [side * .44, 1.87, .22]
+    const elbow = [side * .65, 1.46, .08]
+    const cuff = [side * .49 + .22, 1.47, -.36]
+    const wrist = [side * .41 + .31, 1.48, -.48]
+    const palm = [side * .33 + .36, 1.495, -.61]
+    m.ellipsoid(shoulder, [.17, .18, .17], blue, 850)
+    m.segment(shoulder, elbow, .155, sleeve, 2100, .128)
+    m.ellipsoid(elbow, [.132, .135, .134], sleeve, 430)
+    m.segment(elbow, cuff, .117, blue, 2100, .077)
+    m.segment(cuff, wrist, .080, '#2d4676', 420, .061)
+    m.segment(wrist, palm, .050, skin, 390, .039)
+    m.ellipsoid(palm, [.080, .033, .095], skin, 450)
+    // Low knuckles and bent fingertips rest on the actual keyboard plane.
+    for (let j = 0; j < 4; j++) {
+      const x = side * (.383 - j * .032) + .36, length = [.092, .119, .108, .081][j]!
+      const knuckle = [x - side * .027, 1.505, -.665 - length * .55]
+      m.segment([x, 1.503, -.65], knuckle, .012, skin, 55, .011)
+      m.segment(knuckle, [x - side * .042, 1.479, -.665 - length], .011, skin, 48, .008)
+    }
+    m.segment([side * .27 + .36, 1.49, -.59], [side * .22 + .36, 1.48, -.66], .021, skin, 120, .013)
+    m.segment([side * .22, 1.01, .30], [side * .30, .77, -.12], .175, denim, 1250, .145)
+    m.segment([side * .30, .77, -.12], [side * .33, .19, -.23], .125, denim, 1050, .09)
+    m.ellipsoid([side * .33, .12, -.36], [.14, .095, .24], '#b7c2c7', 680)
+    m.box([side * .33, .055, -.36], [.26, .035, .39], '#8595a2', 250)
   }
   return m.cloud
 }
 
 function laptop() {
   const m = new Model('laptop')
-  m.box([0, 1.493, -.72], [.96, .037, .64], '#b7c6ce', 1600)
+  m.transform.makeTranslation(.18,0,0)
+  m.box([0, 1.452, -.72], [.96, .037, .64], '#b7c6ce', 2200)
   // Screen front faces +Z: both the programmer and the rear camera see it.
   m.box([0, 1.83, -1.007], [.99, .66, .043], '#465a69', 1150, [-.14, 0, 0])
   for (let row = 0; row < 4; row++) for (let col = 0; col < 10; col++) {
-    m.box([-.365 + col * .081, 1.516, -.88 + row * .078], [.058, .005, .052], '#3e4e61', 10)
+    m.box([-.365 + col * .081, 1.476, -.88 + row * .078], [.058, .005, .052], '#3e4e61', 18)
   }
-  m.box([0, 1.517, -.515], [.28, .004, .13], '#e0e6e5', 140)
+  m.box([0, 1.477, -.515], [.28, .004, .13], '#e0e6e5', 180)
   return m.cloud
 }
 
 function screen() {
   const m = new Model('screen')
+  m.transform.makeTranslation(.18,0,0)
   m.box([0, 1.83, -.980], [.90, .575, .003], '#dcece4', 650, [-.14, 0, 0])
   const canvas = document.createElement('canvas')
   canvas.width = 320; canvas.height = 180
@@ -241,25 +291,34 @@ function hand(pos: number[], rotation: number[], scale: number, mirror = 1) {
 }
 
 const handTransforms = [
-  { position: [-.12, 2.42, .52], rotation: [.22, -.44, -.58], scale: .29, mirror: 1 },
-  { position: [3.35, 3.32, -.55], rotation: [-.12, -.10, 2.32], scale: .27, mirror: -1 },
+  { position: [3.35, 3.32, -.55], rotation: [-.12, -.10, 2.32], scale: .22, mirror: -1 },
 ]
 const handoffAnchor = new THREE.Vector3(0, .46, .46)
 export const gripAnchors = handTransforms.map(h => handoffAnchor.clone().applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3().fromArray(h.position), new THREE.Quaternion().setFromEuler(new THREE.Euler(...h.rotation as [number, number, number])), new THREE.Vector3(h.scale * h.mirror, h.scale, h.scale))))
+export const relayAnchor = new THREE.Vector3(0, 2.62, .55)
 export const requestPath = new THREE.CatmullRomCurve3([
   new THREE.Vector3(.2, 2.05, -.96), new THREE.Vector3(-1.1, 2.82, .10),
-  gripAnchors[0]!, new THREE.Vector3(-.1, 4.6, .1),
-  gripAnchors[1]!, new THREE.Vector3(4.0, 5.40, -1.6),
+  relayAnchor, new THREE.Vector3(-.1, 4.6, .1),
+  gripAnchors[0]!, new THREE.Vector3(4.0, 5.40, -1.6),
 ])
 
-export function buildClouds(): Cloud[] {
+export function buildClouds(roomX = 0): Cloud[] {
   seed = 71339
   const roomClouds = [room(), desk(), character(), laptop(), screen()]
-  for (const cloud of roomClouds) for (const values of [cloud.positions, cloud.closed]) {
-    for (let i = 0; i < values.length; i += 3) {
-      values[i] = values[i]! * .46
-      values[i + 1] = values[i + 1]! * .46 - 2.02
-      values[i + 2] = values[i + 2]! * .46
+  const roomTransform = new THREE.Matrix4().makeScale(.46, .46, .46).setPosition(roomX, -2.27, 0)
+  for (const cloud of roomClouds) {
+    for (const geometry of cloud.occluders) geometry.applyMatrix4(roomTransform)
+    if (cloud.occluders.length) {
+      const merged = mergeGeometries(cloud.occluders)
+      cloud.occluders.forEach(geometry => geometry.dispose())
+      cloud.occluders = [merged]
+    }
+    for (const values of [cloud.positions, cloud.closed, cloud.lines, cloud.closedLines]) {
+      for (let i = 0; i < values.length; i += 3) {
+        values[i] = values[i]! * .46 + roomX
+        values[i + 1] = values[i + 1]! * .46 - 2.27
+        values[i + 2] = values[i + 2]! * .46
+      }
     }
   }
   return [...roomClouds, ...handTransforms.map(h => hand(h.position, h.rotation, h.scale, h.mirror))]

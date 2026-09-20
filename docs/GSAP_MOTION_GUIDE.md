@@ -13,12 +13,12 @@ and local Skills are installed; the homepage scene now applies this guidance.
   The package includes TypeScript declarations and its plugins; no separate
   `@types/gsap` package or private plugin registry is needed.
 - Local agent tooling: seven unmodified official Skills are installed under
-  `~/.codex/skills/` on the current development machine: `gsap-core`,
-  `gsap-timeline`, `gsap-scrolltrigger`, `gsap-plugins`, `gsap-utils`,
-  `gsap-performance`, and `gsap-frameworks`. Each has a `SKILL.md` entry point.
-  All seven files were checked against the upstream revision recorded below.
-- Skills are local tooling, not vendored project files or frontend dependencies.
-  Other development machines need their own installation from the official source.
+  `~/.codex/skills/` on the development machine: `gsap-core`, `gsap-timeline`,
+  `gsap-scrolltrigger`, `gsap-plugins`, `gsap-utils`, `gsap-performance`, and
+  `gsap-frameworks`. Each has a `SKILL.md` entry point. All seven files were
+  checked against the upstream revision recorded below.
+- Skills are local guidance, not frontend dependencies. The runtime package
+  remains pinned in `web/package.json` and `web/pnpm-lock.yaml`.
 - `web/src/scene/homepage.ts` imports GSAP core for the finite intro, separate
   ambient loop, interruption, reduced-motion matching and teardown. It does not
   register an unused plugin. Runtime attribution and license details are recorded
@@ -145,7 +145,7 @@ Use native scrolling; this project does not adopt wheel/touch hijacking or a cus
 smooth-scroll proxy. Development markers must not ship.
 
 MotionPath, Flip, Draggable, and other plugins require a concrete product use case,
-registration, cleanup, and review in `web/test.html`. Do not ship GSDevTools or
+registration, cleanup, and review in the relevant development preview. Do not ship GSDevTools or
 development-only tooling. Record adopted dependencies and licenses through the
 normal dependency review.
 
@@ -188,7 +188,7 @@ API references: [Timeline](https://gsap.com/docs/v3/GSAP/Timeline/),
 - Keyboard focus, login navigation, Escape behavior, and semantic content are not
   delayed or replaced by illustration.
 - Desktop/mobile, light/dark, keyboard, and reduced-motion states were reviewed in
-  `web/test.html` or the relevant development preview.
+  the relevant development preview.
 - Repeated Login activation, Escape, direct `/login`, route changes, resize, and
   motion-preference changes leave no duplicate loops, stale callbacks, or lost focus.
 - Profile the settled loop and active transitions on representative hardware;

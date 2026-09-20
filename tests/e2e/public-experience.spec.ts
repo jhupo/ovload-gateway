@@ -5,33 +5,73 @@ test('particle homepage, theme, language and authentication presentation', async
   const errors: string[] = []
   const writes: string[] = []
   page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   page.on('console', message => { if (message.type() === 'warning' && message.text().includes('Not found')) errors.push(message.text()) })
   page.on('request', request => { if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) writes.push(request.url()) })
 
   await page.goto('/')
+  // The decorative Three.js chunk loads asynchronously after the usable page.
+  // Wait for its explicit initialization marker before checking the integrated UI.
+  await page.waitForFunction(() => '__ovloadHomepage' in window, undefined, { timeout: 15000 })
   await expect(page.getByRole('heading', { name: 'Ovload Gateway 首页' })).toBeAttached()
   await expect(page.locator('.gateway-canvas canvas')).toBeVisible()
   await expect(page.locator('.connection-caption')).toHaveText('汇聚 · 路由 · 回流')
   await expect(page.locator('.network-center')).toHaveCount(0)
   await expect.poll(async () => page.evaluate(() => {
     const scene = (window as Window & { __ovloadHomepage?: { inspect(): {
-      settled: boolean, centerPresence: number, trunkPresence: number, capturedRoutes: number,
-      retiringRoutes: number, maxCapturedRoutes: number, providerCount: number, taskPaths: number,
+      settled: boolean, trunkPresence: number, capturedRoutes: number,
+      retiringRoutes: number, maxCapturedRoutes: number, providerCount: number,
+      visibleBranches: number, maxBranches: number,
     } } }).__ovloadHomepage
     return scene ? scene.inspect() : null
   }), { timeout: 25000 }).toMatchObject({
     settled: true,
-    centerPresence: 1,
     trunkPresence: 1,
     capturedRoutes: 1,
     maxCapturedRoutes: 20,
     providerCount: 3,
-    taskPaths: 3,
+    maxBranches: 100,
   })
-  const sceneState = (await page.evaluate(() => (window as Window & { __ovloadHomepage?: { inspect(): { particles: number, captureLanes: number } } }).__ovloadHomepage?.inspect()))!
+  const sceneState = (await page.evaluate(() => (window as Window & { __ovloadHomepage?: { inspect(): { particles: number, captureLanes: number, visibleBranches: number } } }).__ovloadHomepage?.inspect()))!
   expect(sceneState.particles).toBeGreaterThan(10000)
   expect(sceneState.captureLanes).toBeGreaterThanOrEqual(5)
   expect(sceneState.captureLanes).toBeLessThanOrEqual(10)
+  expect(sceneState.visibleBranches).toBeGreaterThanOrEqual(30)
+  expect(sceneState.visibleBranches).toBeLessThanOrEqual(100)
+
+  const connections = await page.evaluate(() => {
+    const scene = (window as Window & { __ovloadHomepage: {
+      setPaused(value: boolean): void, reviewMotionAt(seconds: number): void,
+      inspectConnections(): { junctions: number[][], sources: number[][], throughEndpoints: number[], joinGaps: number[], joinAlignment: number[], roomX: number, rootX: number },
+    } }).__ovloadHomepage
+    scene.setPaused(true)
+    scene.reviewMotionAt(0)
+    const start=scene.inspectConnections()
+    scene.reviewMotionAt(24)
+    const turned=scene.inspectConnections()
+    scene.setPaused(false)
+    return {start,turned}
+  })
+  expect(connections.start.roomX).toBeGreaterThan(connections.start.rootX+2)
+  expect(connections.turned.sources).toEqual(connections.start.sources)
+  expect(connections.turned.junctions).not.toEqual(connections.start.junctions)
+  for(const [index,point] of connections.turned.junctions.entries()){
+    const original=connections.start.junctions[index]!
+    // Local breathing remains subtle and never rotates the whole attachment.
+    expect(Math.hypot(...point.map((value,axis)=>value-original[axis]!))).toBeLessThan(.2)
+  }
+  expect(Math.max(...connections.turned.joinGaps)).toBeLessThan(.00001)
+  expect(Math.min(...connections.turned.joinAlignment)).toBeGreaterThan(.97)
+  expect(Math.min(...connections.turned.throughEndpoints)).toBeGreaterThan(2.5)
+
+  await page.evaluate(() => {
+    const scene = (window as Window & { __ovloadHomepage?: { reviewBranchGrowth(count: number): void } }).__ovloadHomepage
+    scene?.reviewBranchGrowth(100)
+  })
+  expect(await page.evaluate(() => {
+    const scene = (window as Window & { __ovloadHomepage?: { inspect(): { visibleBranches: number } } }).__ovloadHomepage
+    return scene?.inspect().visibleBranches
+  })).toBe(100)
 
   await page.evaluate(() => {
     const scene = (window as Window & { __ovloadHomepage?: { reviewCaptureRetention(count: number): void } }).__ovloadHomepage

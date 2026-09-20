@@ -40,26 +40,19 @@ to PrimeVue 5 or themes 3: their commercial license terms differ from this proje
 Use library components directly; introduce a domain composition only for a concrete
 product requirement. Do not wrap every control or implement competing primitives.
 
-Run `pnpm --dir web dev` and open `/test.html` for the component review catalog.
-It imports the actual library controls and shared configuration, not copied mockups.
-Controls include buttons, inputs, password visibility, textarea, number stepping,
-single/multiple/autocomplete selection, date ranges, switch, checkbox, radio,
-slider, segmented buttons, tags, badges, chips, avatars, progress, skeletons,
-messages, dialog, confirmation, drawer, popover, menu, tooltip, toast, table sorting,
-pagination/selection, tabs, accordion, stepper, local file selection, tree, timeline,
-divider, and breadcrumbs. Layout/plan cards remain ordinary semantic composition.
-
-Add future controls and applicable states to the catalog before product integration.
-Obtain user design approval, then reuse the same imports, preset, tokens, and patterns.
-The catalog is not an assertion that every future feature is already implemented.
+Run `pnpm --dir web dev` and open `/preview.html?view=user` or
+`/preview.html?view=admin` for the development preview. It uses the actual PrimeVue
+components and shared configuration. Review new controls and applicable states in
+the preview and then in the integrated product flow before promotion. Obtain user
+design approval and reuse the same imports, preset, tokens, and patterns.
 Review keyboard/focus behavior, mobile/desktop, light/dark, and reduced motion.
 Library transitions supply modal/drawer lifecycle and focus management.
 Avoid decorative motion in dense operational screens and never animate log rows.
 
-All catalog business data is labeled synthetic. Actions affect only local state;
+All preview business data is labeled synthetic. Actions affect only local state;
 file selection shows a filename without reading or uploading its contents.
-The Vite test.html entry is development-only and excluded from the production build.
-Browser tests live under tests/e2e; the catalog under web/src/design-test.
+Browser tests live under tests/e2e; the preview implementation is under
+web/src/design-test.
 The interface supports Simplified Chinese and English through vue-i18n. Maintained documentation is English.
 
 ## Material-inspired glass review
@@ -125,11 +118,10 @@ ConnectionScene owns a semantic connection illustration. Scroll progress changes
 its line reveal through one passive, requestAnimationFrame-throttled listener.
 The existing library continues to own buttons, fields, overlays and focus traps.
 
-/test.html remains the component catalog; /preview.html?view=user and
-/preview.html?view=admin are development-only page concepts with local state
-and a compact sample-data marker. They do not submit credentials, create API
-keys, or contact provider endpoints. New interaction patterns remain subject
-to user visual review before business integration.
+/preview.html?view=user and /preview.html?view=admin are development-only page
+concepts with local state and a compact sample-data marker. They do not submit
+credentials, create API keys, or contact provider endpoints. New interaction
+patterns remain subject to user visual review before business integration.
 Keep copy concise: labels, necessary status/validation, and meaningful product
 content. Put explanations of components, motion and architecture in documents.
 Reference page http://192.168.2.150:18081/login was inspected read-only. Its
@@ -176,8 +168,8 @@ ship development markers or an unbounded particle/requestAnimationFrame loop.
 
 Pause decorative work when the document is hidden or the scene is offscreen. Reduced
 motion still exposes the same semantic content, focus order, and actions immediately.
-Review new GSAP states in `web/test.html` across desktop/mobile, both themes, keyboard,
-and reduced-motion before route integration. Seven official GSAP Skills are installed
+Review new GSAP states in the relevant development preview across desktop/mobile,
+both themes, keyboard, and reduced-motion before route integration. Seven official GSAP Skills are installed
 as local agent tooling; their files are not vendored in this repository. This guidance
 is derived from the public GSAP v3 documentation and `greensock/gsap-skills`.
 See [GSAP motion guide](GSAP_MOTION_GUIDE.md) for installation details, sources,

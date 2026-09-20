@@ -55,9 +55,9 @@ export function createParticleScene(host: HTMLElement, onReady: () => void) {
   host.appendChild(renderer.domElement)
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(38, 1, .1, 80)
-  camera.position.set(6.0, 5.0, 11.6)
+  camera.position.set(6.0, 2.2, 11.6)
   const controls = new OrbitControls(camera, renderer.domElement)
-  controls.target.set(0, 2.72, -.15)
+  controls.target.set(0, .70, -.15)
   controls.enableDamping = false
   controls.enablePan = false
   controls.minDistance = 5; controls.maxDistance = 22
@@ -71,6 +71,7 @@ export function createParticleScene(host: HTMLElement, onReady: () => void) {
   }
   const groups = new Map<LayerId, THREE.Group>()
   const materials: THREE.ShaderMaterial[] = []
+  const depthMaterial=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:true})
   let totalParticles = 0
   const mobile = window.matchMedia('(max-width: 700px)').matches
   for (const cloud of buildClouds()) {
@@ -102,6 +103,10 @@ export function createParticleScene(host: HTMLElement, onReady: () => void) {
     points.frustumCulled = false
     if (!groups.has(cloud.layer)) { const group = new THREE.Group(); groups.set(cloud.layer, group); scene.add(group) }
     groups.get(cloud.layer)!.add(points)
+    for(const geometry of cloud.occluders){
+      const mesh=new THREE.Mesh(geometry,depthMaterial);mesh.renderOrder=-1;mesh.frustumCulled=false
+      groups.get(cloud.layer)!.add(mesh)
+    }
   }
 
   const flowGroup = new THREE.Group()
@@ -140,6 +145,7 @@ export function createParticleScene(host: HTMLElement, onReady: () => void) {
     if (disposed) return
     uniforms.uForm.value = state.form; uniforms.uUnfold.value = state.unfold
     uniforms.uGrip.value = state.grip; uniforms.uTime.value = state.time
+    depthMaterial.visible=state.form>.995
     updateFlow()
     renderer.render(scene, camera)
     renderCount++
@@ -184,13 +190,13 @@ export function createParticleScene(host: HTMLElement, onReady: () => void) {
     state.grip = next === 'grip' ? 1 : 0
     for (const [id, group] of groups) group.visible = next === 'room' ? id !== 'hands' && id !== 'flow' : next === 'open' || next === 'grip' ? id === 'hands' || id === 'flow' : true
     if (next === 'room') {
-      camera.position.set(3.35, 3.22, 6.35); controls.target.set(0, 1.98, -.48)
+      camera.position.set(.65, -.05, 6.35); controls.target.set(0, -1.25, -.48)
     } else if (next === 'world') {
       camera.position.set(4.0, 3.50, 9.7); controls.target.set(0, 2.8, 0)
     } else if (next === 'open' || next === 'grip') {
       camera.position.set(3.35, 4.63, 10.8); controls.target.set(.1, 3.85, 0)
     } else {
-      camera.position.set(6.0, 5.0, 11.6); controls.target.set(0, 2.72, -.15)
+      camera.position.set(6.0, 2.2, 11.6); controls.target.set(0, .70, -.15)
     }
     controls.update(); resize(); render()
   }
@@ -256,7 +262,8 @@ export function createParticleScene(host: HTMLElement, onReady: () => void) {
       document.removeEventListener('visibilitychange', onVisibility)
       preference.removeEventListener('change', onPreference)
       renderer.domElement.removeEventListener('keydown', onKeyboard)
-      scene.traverse(object => { if (object instanceof THREE.Points) object.geometry.dispose() })
+      scene.traverse(object => { if (object instanceof THREE.Points||object instanceof THREE.Mesh) object.geometry.dispose() })
+      depthMaterial.dispose()
       materials.forEach(material => material.dispose()); flowMaterial.dispose()
       renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove()
     },

@@ -64,7 +64,7 @@ onUnmounted(()=>{
 </template>
 
 <style>
-.gateway-home{--home-bg:#cfd6d8;--home-ink:#202a32;--home-muted:#52626b;--home-rule:#aebabe;position:relative;isolation:isolate;height:100svh;min-height:560px;overflow:hidden;background:var(--home-bg);color:var(--home-ink);transition:background .65s,color .4s}
+.gateway-home{--home-bg:#e3e6e8;--home-ink:#233747;--home-muted:#566875;--home-rule:#b2bcc4;position:relative;isolation:isolate;height:100svh;min-height:560px;overflow:hidden;background:var(--home-bg);color:var(--home-ink);transition:background .65s,color .4s}
 [data-theme=dark] .gateway-home{--home-bg:#101216;--home-ink:#eceef3;--home-muted:#939ead;--home-rule:#2b303a}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .gateway-canvas{position:absolute;inset:0;z-index:-2;opacity:1;transition:opacity 1.15s .82s,filter 1.15s .82s}

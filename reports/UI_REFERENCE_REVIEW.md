@@ -29,8 +29,8 @@ Ovload uses its own font/icon choices and a 280ms tab underline with that easing
 A public marketing page does not dictate administration table density.
 
 ## Implementation and review scope
-The development-only test.html catalog includes localized controls, collapsible
-navigation, charts, contextual dialog dismissal, glass surfaces, and theme motion.
-Product promotion remains subject to user design review. Browser regressions
-exercise desktop/mobile, both themes, language persistence, and dismissal rules.
+The development-only preview includes localized controls, collapsible navigation,
+charts, contextual dialog dismissal, glass surfaces, and theme motion. Product
+promotion remains subject to user design review. Browser regressions exercise
+desktop/mobile, both themes, language persistence, and dismissal rules.
 No backend, provider request identity, or production data behavior changed here.

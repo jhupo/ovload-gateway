@@ -90,9 +90,10 @@ Historical source attachments in reports/source-archive retain their original
 language; all maintained documentation and analysis summaries are English.
 
 ## Public interface and design previews
-The Vite server exposes `/` and `/login`, plus development-only `/test.html`
-and `/preview.html?view=user` or `?view=admin`. Only index.html is a production
-entry. The login presentation does not submit until an authentication API exists.
+The Vite server exposes `/` and `/login`, plus the development-only
+`/preview.html?view=user` or `?view=admin` previews. Only index.html is a
+production entry. The login presentation does not submit until an authentication
+API exists.
 Do not promote the dashboard fixtures into live management routes.
 The server explicitly serves index.html on `/login` so direct navigation works;
 unknown APIs and static files retain their 404 behavior.

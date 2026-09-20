@@ -26,7 +26,7 @@ Environment variables must be set in the shell; .env is not loaded automatically
 - [Development standards](docs/DEVELOPMENT.md)
 - [Design system](docs/DESIGN_SYSTEM.md)
 - [Architecture decision](docs/adr/0001-rust-modular-monolith.md)
-- [Agent instructions](.codex/AGENTS.md)
+- [Agent instructions](AGENTS.md)
 
 ## License
 LGPL-3.0-only. See [LICENSE](LICENSE) for LGPLv3 and [COPYING](COPYING)
