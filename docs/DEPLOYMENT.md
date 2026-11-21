@@ -45,7 +45,7 @@ OVLOAD_PUBLIC_HOST=47.96.235.250
 OVLOAD_PUBLIC_ORIGIN=https://gateway.example.com
 OVLOAD_CONFIG_DIRECTORY=/opt/ovload-gateway/private
 OVLOAD_CARGO_PROFILE=dev
-OVLOAD_BUILD_JOBS=1
+OVLOAD_BUILD_JOBS=0
 OVLOAD_RUN_BACKEND_TESTS=true
 OVLOAD_REVISION=<source-commit>
 OVLOAD_BUILD_TIME=<UTC-build-time>
@@ -77,11 +77,13 @@ docker compose --env-file /opt/ovload-gateway/deploy.env \
   -f deploy/compose.yml -f deploy/compose.build.yml build gateway
 ```
 
-The image builds the frontend and Rust binary on the server. Cargo object files
-use a BuildKit tmpfs and do not consume a persistent image layer. Ensure sufficient
-RAM; the 32 GB test server uses the stripped `dev` profile with one build job.
-`OVLOAD_RUN_BACKEND_TESTS=true` also runs the explicitly selected gateway
-`bootstrap::` regression tests before building the binary.
+The image builds the frontend and Rust binary on the server. Cargo registry,
+Git, and target artifacts use persistent BuildKit caches and do not become image
+layers. `OVLOAD_BUILD_JOBS=0` lets Cargo use all available CPU threads; set a
+positive value to cap parallelism when memory is constrained. `OVLOAD_RUN_BACKEND_TESTS=true`
+runs the explicitly selected gateway `bootstrap::` regression tests before the
+binary build; leave it false for routine incremental deploys after the release
+test has passed.
 
 Start the data services and gateway:
 

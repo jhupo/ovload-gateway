@@ -18,7 +18,7 @@ COPY deploy/config.example.yaml deploy/config.example.yaml
 COPY src/ src/
 COPY tests/ tests/
 ARG CARGO_PROFILE=release
-ARG CARGO_BUILD_JOBS=1
+ARG CARGO_BUILD_JOBS=0
 ARG RUN_BACKEND_TESTS=false
 ARG CPR_GIT_SHA=unknown
 ARG CPR_BUILD_TIME=unknown
@@ -28,15 +28,21 @@ ENV CARGO_PROFILE_DEV_DEBUG=0 \
     CARGO_PROFILE_TEST_DEBUG=0 \
     CARGO_PROFILE_TEST_INCREMENTAL=false \
     CPR_BUILD_TYPE=docker
-# Keep temporary object files off small disks; only the stripped binary is layered.
+# Keep Cargo artifacts in a BuildKit cache so later builds reuse unchanged crates.
 RUN --mount=type=cache,id=ovload-cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=ovload-cargo-git,target=/usr/local/cargo/git \
-    --mount=type=tmpfs,target=/source/target \
+    --mount=type=cache,id=ovload-cargo-target,target=/source/target \
     set -eu; \
-    if [ "$RUN_BACKEND_TESTS" = true ]; then \
-      cargo test --locked -p ovload-gateway --test main bootstrap::; \
+    jobs_args=""; \
+    if [ "$CARGO_BUILD_JOBS" -gt 0 ]; then \
+      jobs_args="--jobs=$CARGO_BUILD_JOBS"; \
+    else \
+      unset CARGO_BUILD_JOBS; \
     fi; \
-    cargo build --locked -p ovload-gateway --profile "$CARGO_PROFILE"; \
+    if [ "$RUN_BACKEND_TESTS" = true ]; then \
+      cargo test --locked $jobs_args -p ovload-gateway --test main bootstrap::; \
+    fi; \
+    cargo build --locked $jobs_args -p ovload-gateway --profile "$CARGO_PROFILE"; \
     profile_directory="$CARGO_PROFILE"; \
     if [ "$CARGO_PROFILE" = dev ]; then profile_directory=debug; fi; \
     mkdir /output; \
