@@ -1,0 +1,66 @@
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { expect, test } from '../../web/node_modules/@playwright/test'
+
+for (const theme of ['light', 'dark'] as const) {
+  for (const mobile of [false, true]) {
+    test(`registration ${theme} ${mobile ? 'mobile' : 'desktop'}`, async ({ page }) => {
+      const english = theme === 'light' ? mobile : !mobile
+      await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
+      await page.addInitScript(language => {
+        if (!localStorage.getItem('i18nextLng')) localStorage.setItem('i18nextLng', language)
+      }, english ? 'en' : 'zh')
+      const errors: string[] = []
+      page.on('pageerror', error => errors.push(error.message))
+      await page.goto('/sign-in')
+      await page.getByRole('link', { name: english ? 'Create an account' : '创建账户', exact: true }).click()
+      await expect(page).toHaveURL(/\/sign-up$/)
+      await expect(page.locator('.auth-card')).toBeVisible()
+      await expect(page.locator('.public-scenery canvas')).toBeAttached({ timeout: 15000 })
+      await expect(page.getByRole('button', { name: /GitHub|Facebook/ })).toHaveCount(0)
+      await expect(page.getByText(/Or continue with|或通过以下方式继续|服务条款/)).toHaveCount(0)
+      const invitation = page.getByLabel(english ? 'Invitation code (optional)' : '邀请码（可选）')
+      await expect(invitation).not.toHaveAttribute('required')
+      await page.screenshot({ path: join(tmpdir(), `ovload-registration-${theme}-${mobile ? 'mobile' : 'desktop'}.png`) })
+      const email = page.getByRole('textbox', { name: english ? 'Email' : '邮箱', exact: true })
+      const password = page.getByLabel(english ? 'Password' : '密码', { exact: true })
+      const confirm = page.getByLabel(english ? 'Confirm Password' : '确认密码', { exact: true })
+      const register = page.getByRole('button', { name: english ? 'Register' : '注册', exact: true })
+      await register.click()
+      await expect(email).toBeFocused()
+      await expect(email).toHaveAttribute('aria-invalid', 'true')
+      await expect(page.locator('[data-slot=form-message]')).toHaveCount(0)
+      await email.fill('reader@example.com')
+      await password.fill('example-password')
+      await confirm.fill('example-password')
+      if (mobile) await invitation.fill('INVITE-42')
+      await register.click()
+      await expect(page.getByRole('heading', { name: english ? 'Verify your email' : '验证邮箱' })).toBeVisible()
+      await expect(page.getByText('reader@example.com', { exact: true })).toBeVisible()
+      const code = page.getByRole('textbox', { name: english ? 'Verification code' : '验证码', exact: true })
+      await expect(code).toBeFocused()
+      await expect(code).toHaveAttribute('autocomplete', 'one-time-code')
+      await code.fill('123456')
+      await page.screenshot({ path: join(tmpdir(), `ovload-verification-${theme}-${mobile ? 'mobile' : 'desktop'}.png`) })
+      await page.getByRole('button', { name: english ? 'Verify and create account' : '验证并创建账户', exact: true }).click()
+      await expect(page.locator('[data-sonner-toast]').last()).toContainText(english ? 'Email verification is not available yet.' : '邮箱验证暂未开放。')
+      await page.getByRole('button', { name: english ? 'Back to registration' : '返回注册', exact: true }).click()
+      await expect(email).toBeFocused()
+      await expect(password).toHaveValue('example-password')
+      await expect(invitation).toHaveValue(mobile ? 'INVITE-42' : '')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, url: location.href }))
+      expect(storage).not.toContain('example-password')
+      expect(storage).not.toContain('reader@example.com')
+      await page.getByRole('button', { name: english ? 'Language' : '语言', exact: true }).click()
+      await page.getByRole('menuitem', { name: english ? '中文' : 'English', exact: true }).click()
+      await expect(page.getByRole('textbox', { name: english ? '邮箱' : 'Email', exact: true })).toHaveValue('reader@example.com')
+      await expect(page.getByLabel(english ? '密码' : 'Password', { exact: true })).toHaveValue('example-password')
+      await expect(page.getByLabel(english ? '确认密码' : 'Confirm Password', { exact: true })).toHaveValue('example-password')
+      await page.reload()
+      await expect(page.getByLabel(english ? '密码' : 'Password', { exact: true })).toHaveValue('')
+      expect(errors).toEqual([])
+    })
+  }
+}

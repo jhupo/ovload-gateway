@@ -1,0 +1,165 @@
+import { expect, test } from '../../web/node_modules/@playwright/test'
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem('ovload.admin-preview', 'active')
+    localStorage.setItem('i18nextLng', 'en')
+  })
+  await page.goto('/feature-settings')
+  await page.getByRole('tab', { name: 'Referral rebates', exact: true }).click()
+})
+
+test('referral draft validates fixed-point limits, saves and discards across tabs', async ({ page }) => {
+  const save = page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true })
+  await expect(page.getByRole('switch', { name: 'Enable referral rebates' })).not.toBeChecked()
+  await expect(page.getByLabel('Global rebate percentage', { exact: true })).toHaveValue('10')
+  await expect(page.getByLabel('Freeze period', { exact: false })).toHaveValue('0')
+  await expect(page.getByLabel('Eligibility period', { exact: false })).toHaveValue('30')
+  await expect(save).toBeDisabled()
+  await page.getByLabel('Global rebate percentage', { exact: true }).fill('101')
+  await page.getByRole('tab', { name: 'Security audit', exact: true }).click()
+  await save.click()
+  await expect(page.getByRole('tab', { name: 'Referral rebates', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByLabel('Global rebate percentage', { exact: true })).toBeFocused()
+  const cases = [
+    { label: 'Global rebate percentage', invalid: ['-1', '100.01', '0.001', ''], valid: '12.50' },
+    { label: 'Freeze period', invalid: ['-1', '0.5', '876001'], valid: '0' },
+    { label: 'Eligibility period', invalid: ['-1', '1.1', '36501'], valid: '0' },
+    { label: 'Per invitee rebate cap', invalid: ['-1', '0.001', '1000000000'], valid: '999999999.99' },
+  ]
+  for (const item of cases) {
+    const field = page.getByLabel(item.label, { exact: false })
+    for (const invalid of item.invalid) {
+      await field.fill(invalid)
+      await save.click()
+      await expect(field).toHaveAttribute('aria-invalid', 'true')
+      await expect(field).toBeFocused()
+      expect(await page.evaluate(() => sessionStorage.getItem('ovload.referral-settings.draft'))).toBeNull()
+    }
+    await field.fill(item.valid)
+  }
+  await page.getByRole('switch', { name: 'Enable referral rebates' }).click()
+  await page.getByRole('tab', { name: 'Security audit', exact: true }).click()
+  await save.click()
+  await expect(save).toBeDisabled()
+  const draft = await page.evaluate(() => JSON.parse(sessionStorage.getItem('ovload.referral-settings.draft')!))
+  expect(draft).toMatchObject({ enabled: true, rate: '12.5', freezeHours: '0', eligibilityDays: '0', cap: '999999999.99', overrides: [] })
+  await page.reload()
+  await page.getByRole('tab', { name: 'Referral rebates', exact: true }).click()
+  await expect(page.getByRole('switch', { name: 'Enable referral rebates' })).toBeChecked()
+  await page.getByLabel('Global rebate percentage', { exact: true }).fill('20')
+  await page.getByRole('link', { name: 'Website settings', exact: true }).click()
+  await expect(page.getByRole('alertdialog')).toBeVisible()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing', exact: true }).click()
+  await expect(page).toHaveURL(/feature-settings/)
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).filter({ visible: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing', exact: true }).click()
+  await expect(page.getByLabel('Global rebate percentage', { exact: true })).toHaveValue('20')
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).filter({ visible: true }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes', exact: true }).click()
+  await expect(page.getByLabel('Global rebate percentage', { exact: true })).toHaveValue('12.5')
+})
+
+test('malformed stored configurations revert to safe preview defaults', async ({ page }) => {
+  await page.evaluate(() => sessionStorage.setItem('ovload.referral-settings.draft', JSON.stringify({ enabled: true, rate: '101', freezeHours: '0', eligibilityDays: '30', cap: '0', overrides: [] })))
+  await page.reload()
+  await page.getByRole('tab', { name: 'Referral rebates', exact: true }).click()
+  await expect(page.getByLabel('Global rebate percentage', { exact: true })).toHaveValue('10')
+  await expect(page.getByRole('switch', { name: 'Enable referral rebates' })).not.toBeChecked()
+})
+
+test('dedicated users support search, add, edit, uniqueness, confirmed deletion and persistence', async ({ page }) => {
+  async function selectUser(name: string) {
+    await page.getByRole('combobox', { name: 'User', exact: true }).click()
+    await page.getByRole('combobox', { name: 'Search email or username' }).fill(name)
+    await page.getByRole('option').filter({ hasText: name }).click()
+  }
+  await page.getByRole('button', { name: 'Add dedicated user', exact: true }).click()
+  await page.getByRole('button', { name: 'Apply to draft' }).click()
+  await expect(page.getByRole('combobox', { name: 'User', exact: true })).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByRole('combobox', { name: 'User', exact: true })).toBeFocused()
+  await selectUser('mia.chen')
+  await page.getByRole('button', { name: 'Apply to draft' }).click()
+  await expect(page.getByLabel('Invitation code', { exact: true })).toHaveAttribute('aria-invalid', 'true')
+  await page.getByLabel('Invitation code', { exact: true }).fill('MIA_2026')
+  await page.getByLabel('Dedicated percentage (%)').fill('15.25')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Apply to draft' }).click()
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Add dedicated user', exact: true })).toBeFocused()
+  await page.getByRole('button', { name: 'Add dedicated user', exact: true }).click()
+  await page.getByRole('combobox', { name: 'User', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Search email or username' }).fill('mia.chen')
+  await expect(page.getByRole('option')).toHaveCount(0)
+  await page.getByRole('combobox', { name: 'Search email or username' }).fill('alex.wang')
+  await page.getByRole('option').filter({ hasText: 'alex.wang' }).click()
+  await page.getByLabel('Invitation code', { exact: true }).fill('mia_2026')
+  await page.getByRole('button', { name: 'Apply to draft' }).click()
+  await expect(page.getByLabel('Invitation code', { exact: true })).toHaveAttribute('aria-invalid', 'true')
+  await page.getByLabel('Invitation code', { exact: true }).fill('ALEX_2026')
+  await page.getByRole('button', { name: 'Apply to draft' }).click()
+  await page.getByRole('textbox', { name: 'Search email or username' }).fill('mia.chen@example.com')
+  await expect(page.getByRole('button', { name: 'Edit mia.chen' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Edit alex.wang' })).toBeHidden()
+  await page.getByRole('button', { name: 'Edit mia.chen' }).click()
+  await expect(page.getByRole('combobox', { name: 'User', exact: true })).toBeDisabled()
+  await page.getByLabel('Dedicated percentage (%)').fill('0')
+  await page.getByRole('button', { name: 'Apply to draft' }).click()
+  await page.getByRole('textbox', { name: 'Search email or username' }).fill('')
+  await page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true }).click()
+  await page.reload()
+  await page.getByRole('tab', { name: 'Referral rebates', exact: true }).click()
+  await expect(page.getByRole('table')).toContainText('MIA_2026')
+  await page.getByRole('button', { name: 'Remove mia.chen' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('button', { name: 'Edit mia.chen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Remove mia.chen' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Edit mia.chen' })).toBeHidden()
+  await page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true }).click()
+  const entries = await page.evaluate(() => JSON.parse(sessionStorage.getItem('ovload.referral-settings.draft')!).overrides)
+  expect(entries).toEqual([{ userId: '1003', invitationCode: 'ALEX_2026', rate: '' }])
+})
+
+test('removed custom menus cannot restore navigation from old drafts', async ({ page }) => {
+  await page.evaluate(() => {
+    const menus = [{ id: 'removed-page', name: 'Removed page', note: '', role: 'all', url: 'https://example.com', icon: '' }]
+    sessionStorage.setItem('ovload.custom-menus.draft', JSON.stringify(menus))
+    sessionStorage.setItem('ovload.general-settings.draft', JSON.stringify({ menus }))
+    sessionStorage.setItem('ovload.preauthorization.preview', 'true')
+  })
+  await page.reload()
+  await expect(page.getByRole('tab', { name: 'Features & navigation', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: 'Security audit', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('tab', { name: 'Model pricing', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Custom menus', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add menu item', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Removed page', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('switch', { name: 'Channel status page', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('switch', { name: 'Request preauthorization', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: 'Channel monitoring', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true })).toBeDisabled()
+})
+
+test('storage failures retain the referral draft without replacing saved configuration', async ({ page }) => {
+  await page.getByLabel('Global rebate percentage', { exact: true }).fill('20')
+  const save = page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true })
+  await save.click()
+  await expect(save).toBeDisabled()
+  await page.getByLabel('Global rebate percentage', { exact: true }).fill('25')
+  await page.getByRole('tab', { name: 'Security audit', exact: true }).click()
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'ovload.referral-settings.draft') throw new DOMException('Storage unavailable', 'QuotaExceededError')
+      original.call(this, key, value)
+    }
+  })
+  await save.click()
+  await expect(page.getByText('Unable to save draft. Check browser storage capacity', { exact: true })).toBeVisible()
+  await expect(save).toBeEnabled()
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('ovload.referral-settings.draft')!).rate)).toBe('20')
+  await page.getByRole('tab', { name: 'Referral rebates', exact: true }).click()
+  await expect(page.getByLabel('Global rebate percentage', { exact: true })).toHaveValue('25')
+})

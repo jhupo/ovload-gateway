@@ -1,0 +1,77 @@
+# Configuration schema from https://github.com/zyycn/codex-proxy-rs (Apache-2.0).
+# Modified for Ovload on 2026-10-28: repository configuration example.
+# Local configuration belongs in deploy/config.yaml. Keep actual passwords out of Git.
+# Relative paths below are resolved against the deploy directory.
+schema_version: 1
+# Optional, private JSON configuration paths. See docs/DEVELOPMENT.md.
+# identity_smtp_config_file: './identity-smtp.json'
+# identity_oauth_config_file: './identity-oauth.json'
+
+host:
+  timezone: 'Asia/Shanghai'
+  listen:
+    host: '127.0.0.1'
+    port: 8080
+  runtime_data_dir: '../.runtime/data'
+  worker_shutdown_timeout_seconds: 30
+  logging:
+    level: 'info'
+    stdout: true
+    file:
+      enabled: true
+      directory: '../.runtime/logs'
+      retention_days: 7
+      max_file_size_mb: 100
+    oauth_recovery: false
+    request_dump: false
+    request_dump_retention_days: 1
+  # Preserve compiled update metadata and the imported CPR_* overrides.
+  system_update: {}
+
+store:
+  # Required restricted file with exactly 32 random raw bytes; retain with backups.
+  provider_credential_key_file: '../.runtime/secrets/provider-credentials.key'
+  database:
+    url: 'postgres://codex_proxy@127.0.0.1:5432/codex_proxy'
+    # Required: 16-128 UTF-8 bytes, nonblank, without control characters.
+    password: &postgres_password ''
+  redis:
+    url: 'redis://127.0.0.1:6379/'
+    # Required: 16-128 UTF-8 bytes, nonblank, without control characters.
+    password: &redis_password ''
+  pool:
+    max_connections: 20
+    acquire_timeout_seconds: 5
+    observability_timeout_seconds: 120
+
+admin:
+  # Optional restricted file with exactly 32 raw bytes for encrypted challenge intents.
+  # Registration/recovery default off; no mail delivery transport is supplied.
+  identity_notification_key_file: null
+  session_ttl_minutes: 1440
+  session_absolute_ttl_minutes: 43200
+  default_username: 'admin'
+  # Required: at least 12 UTF-8 bytes; weak passwords and '$' are rejected.
+  default_password: ''
+
+api:
+  identity_public_origin: 'https://localhost'
+  asset_directory: '../web/dist'
+  cors_allowed_origins: []
+  request_timeout_seconds: null
+  request_id_header: 'x-request-id'
+
+openai:
+  api:
+    base_url: 'https://chatgpt.com/backend-api'
+  ws_pool:
+    enabled: true
+    max_age_ms: 3300000
+    max_connecting: 8
+    stream_idle_timeout_ms: 300000
+  quota:
+    refresh_interval_minutes: 15
+  # OAuth client identity and token endpoint use the provider's compiled defaults.
+  stream_max_retries: 5
+  residency: null
+  account_routing_override: null

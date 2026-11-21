@@ -1,0 +1,163 @@
+import { expect, test } from '../../web/node_modules/@playwright/test'
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    sessionStorage.setItem('ovload.admin-preview', 'active')
+    localStorage.setItem('i18nextLng', 'en')
+  })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+})
+
+test('settings starts open, stays collapsible and exposes the new user destinations', async ({ page }) => {
+  await page.goto('/dashboard')
+  const sidebar = page.locator('[data-slot=sidebar-inner]')
+  await expect(sidebar.getByRole('link', { name: 'Website settings', exact: true })).toBeVisible()
+  await page.goto('/user/dashboard')
+  const settings = sidebar.getByRole('button', { name: 'Settings', exact: true })
+  await expect(settings).toHaveAttribute('data-state', 'open')
+  await settings.click()
+  await expect(sidebar.getByRole('link', { name: 'My orders', exact: true })).not.toBeVisible()
+  await settings.click()
+  await sidebar.getByRole('link', { name: 'My orders', exact: true }).click()
+  const header = await page.getByTestId('user-workspace-header').elementHandle()
+  const tabs = await page.getByRole('tablist', { name: 'Settings', exact: true }).elementHandle()
+  for (const [name, route] of [['Redeem', 'redeem'], ['Referral Rewards', 'referrals'], ['My orders', 'orders']]) {
+    await page.getByRole('tab', { name, exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`/user/${route}$`))
+    await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
+    expect(await header!.evaluate(element => element.isConnected)).toBe(true)
+    expect(await tabs!.evaluate(element => element.isConnected)).toBe(true)
+  }
+})
+
+test('personal orders support pagination, search, faceted filters, column controls and read-only details', async ({ page }) => {
+  const writes: string[] = []
+  page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.url()) })
+  await page.goto('/user/orders')
+  const table = page.getByRole('table', { name: 'My orders', exact: true })
+  await expect(table.locator('tbody tr')).toHaveCount(10)
+  await page.getByRole('button', { name: 'Next page', exact: true }).click()
+  await expect(table).not.toContainText('DEMO-ORD-TOP-001')
+  await page.getByRole('textbox', { name: 'Search order number or plan…', exact: true }).fill('DEMO-ORD-TOP-001')
+  await expect(table.locator('tbody tr')).toHaveCount(1)
+  await expect(table).toContainText('Pending')
+  const trigger = page.getByRole('button', { name: 'Order details · DEMO-ORD-TOP-001', exact: true })
+  await trigger.click()
+  const dialog = page.getByRole('dialog', { name: 'Order details', exact: true })
+  await expect(dialog).toContainText('CNY 102.00')
+  await expect(dialog).toContainText('CNY 2.00')
+  await expect(dialog).toContainText('OVL 15.00')
+  await expect(dialog.getByRole('button', { name: /Pay|Cancel order|Refund/ })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await page.mouse.click(5, 5)
+  await expect(dialog).not.toBeVisible()
+  await page.getByRole('button', { name: 'Reset', exact: true }).click()
+  await page.getByRole('button', { name: 'Status', exact: true }).click()
+  await page.getByRole('option', { name: /Pending/ }).click()
+  await page.keyboard.press('Escape')
+  await expect(table.locator('tbody tr')).toHaveCount(3)
+  await expect(table).not.toContainText('Completed')
+  await page.getByRole('button', { name: 'View', exact: true }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Payment method', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(table.getByRole('columnheader', { name: 'Payment method', exact: true })).toHaveCount(0)
+  expect(writes).toEqual([])
+})
+
+test('redemption keeps input in memory and filters only masked personal history without redeeming', async ({ page }) => {
+  const writes: string[] = []
+  page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.url()) })
+  await page.goto('/user/redeem')
+  const code = page.getByRole('textbox', { name: 'Redemption code', exact: true })
+  await code.fill('DEMO-INPUT-ONLY')
+  await code.press('Enter')
+  await expect(page.getByRole('button', { name: 'Redeem', exact: true })).toBeDisabled()
+  await expect(page.getByRole('status')).toContainText('Redemption API not connected')
+  expect(await page.evaluate(() => JSON.stringify({ ...sessionStorage, ...localStorage }).includes('DEMO-INPUT-ONLY'))).toBe(false)
+  const table = page.getByRole('table', { name: 'Redemption history', exact: true })
+  await page.getByRole('button', { name: 'Type', exact: true }).click()
+  await page.getByRole('option', { name: /Subscription plan/ }).click()
+  await page.keyboard.press('Escape')
+  await expect(table.locator('tbody tr')).toHaveCount(2)
+  await expect(table).not.toContainText('Account balance')
+  await page.getByRole('textbox', { name: 'Search code suffix or plan…', exact: true }).fill('NO-MATCH')
+  await expect(table).toContainText('No results')
+  await page.getByRole('button', { name: 'Reset', exact: true }).click()
+  await expect(table.locator('tbody tr')).toHaveCount(8)
+  await page.getByRole('tab', { name: 'My orders', exact: true }).click()
+  await page.getByRole('tab', { name: 'Redeem', exact: true }).click()
+  await expect(code).toHaveValue('')
+  expect(writes).toEqual([])
+})
+
+test('referral balances reconcile and invitation copying reports success and permission failures', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+      writeText: async (value: string) => {
+        if (Reflect.get(window, 'clipboardDenied')) throw new Error('Permission denied')
+        Reflect.set(window, 'copiedInvitation', value)
+      },
+    } })
+  })
+  const writes: string[] = []
+  page.on('request', request => { if (!['GET', 'HEAD'].includes(request.method())) writes.push(request.url()) })
+  await page.goto('/user/referrals')
+  await expect(page.getByTestId('referral-available')).toHaveText('OVL 12.50')
+  await expect(page.getByTestId('referral-frozenBalance')).toHaveText('OVL 6.75')
+  await expect(page.getByTestId('referral-total')).toHaveText('OVL 31.25')
+  await expect(page.getByTestId('referral-invited')).toHaveText('8')
+  await expect(page.getByRole('button', { name: 'Transfer to balance', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Copy invitation code', exact: true }).click()
+  await expect(page.getByText('Sample invitation copied', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => Reflect.get(window, 'copiedInvitation'))).toBe('OV-DEMO-ALEX')
+  await page.getByRole('button', { name: 'Copy invitation link', exact: true }).click()
+  expect(await page.evaluate(() => Reflect.get(window, 'copiedInvitation'))).toBe('https://example.invalid/sign-up?invite=OV-DEMO-ALEX')
+  await page.evaluate(() => Reflect.set(window, 'clipboardDenied', true))
+  await page.getByRole('button', { name: 'Copy invitation link', exact: true }).click()
+  await expect(page.getByText('Could not copy. Check clipboard permissions.', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: 'Rebates', exact: true }).click()
+  const table = page.getByRole('table', { name: 'Rebates', exact: true })
+  await page.getByRole('button', { name: 'Status', exact: true }).click()
+  await page.getByRole('option', { name: /Frozen/ }).click()
+  await page.keyboard.press('Escape')
+  await expect(table.locator('tbody tr')).toHaveCount(3)
+  await page.getByRole('tab', { name: 'Transfers', exact: true }).click()
+  await expect(page.getByRole('table', { name: 'Transfers', exact: true }).locator('tbody tr')).toHaveCount(2)
+  expect(writes).toEqual([])
+})
+
+test('disabled referrals are hidden and direct routes stay in the user workspace', async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem('ovload.feature-settings.preview', JSON.stringify({ referrals: false, security_audit: true })))
+  await page.goto('/user/referrals')
+  await expect(page).toHaveURL(/\/user\/dashboard$/)
+  await expect(page.locator('[data-slot=sidebar-inner]').getByRole('link', { name: 'Referral Rewards', exact: true })).toHaveCount(0)
+  await page.goto('/user/orders')
+  await expect(page.getByRole('tab', { name: 'Referral Rewards', exact: true })).toHaveCount(0)
+})
+
+test('new settings pages keep the mobile active tab visible and tables scroll inside the content', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 1000 })
+  for (const [route, label] of [['orders', 'My orders'], ['redeem', 'Redeem'], ['referrals', 'Referral Rewards']]) {
+    await page.goto(`/user/${route}`)
+    const tabs = page.getByRole('tablist', { name: 'Settings', exact: true })
+    const selected = tabs.getByRole('tab', { name: label, exact: true })
+    await expect(selected).toHaveAttribute('data-state', 'active')
+    await expect.poll(async () => {
+      const list = await tabs.boundingBox(), tab = await selected.boundingBox()
+      return tab!.x >= list!.x - 1 && tab!.x + tab!.width <= list!.x + list!.width + 1
+    }).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(await page.locator('main .faded-bottom').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+    const tableContainer = page.getByRole('table').locator('..')
+    expect(await tableContainer.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+    await tableContainer.evaluate(element => { element.scrollLeft = element.scrollWidth })
+    if (route === 'orders') {
+      await page.getByRole('button', { name: /^Order details ·/ }).first().click()
+      await expect(page.getByRole('dialog', { name: 'Order details', exact: true })).toBeVisible()
+      await page.keyboard.press('Escape')
+    }
+    await expect(page.getByTestId('user-workspace-header').getByRole('button', { name: 'Language', exact: true })).toBeVisible()
+  }
+})

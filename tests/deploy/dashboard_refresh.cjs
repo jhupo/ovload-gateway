@@ -1,0 +1,10 @@
+const fs=require('node:fs');const {createRequire}=require('node:module');const {chromium,expect}=createRequire('/src/web/package.json')('@playwright/test');
+(async()=>{
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const baseURL='https://192.168.2.150:19443';const context=await browser.newContext({baseURL,ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}});
+ await context.addInitScript(()=>{localStorage.setItem('i18nextLng','zh');document.cookie='vite-ui-theme=dark; path=/';window.framesSeen=[];new MutationObserver(()=>{const main=document.querySelector('main');if(!main)return;const sample={path:location.pathname,heading:main.querySelector('h1')?.textContent,text:main.innerText.slice(0,550),dashLinks:[...document.querySelectorAll('a[href*="dashboard"]')].map(x=>x.getAttribute('href'))};const value=JSON.stringify(sample);if(window.framesSeen.at(-1)!==value)window.framesSeen.push(value)}).observe(document,{subtree:true,childList:true,characterData:true})});
+ const login=await context.request.post('/api/v1/auth/sessions',{headers:{Origin:baseURL},data:{login:'ovload_test_admin',password:fs.readFileSync('/runtime/administrator.password','utf8').trim()}});if(login.status()!==200)throw Error('Login '+login.status());
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/dashboard');await page.waitForLoadState('networkidle');
+ const out='/src/test-results/dashboard-refresh';fs.mkdirSync(out,{recursive:true});await page.screenshot({path:out+'/desktop.png',fullPage:true});await page.reload();await page.waitForLoadState('networkidle');
+ const result=await page.evaluate(()=>window.framesSeen.map(x=>JSON.parse(x)));fs.writeFileSync(out+'/refresh.json',JSON.stringify({result,errors},null,2));console.log(JSON.stringify({result,errors},null,2));
+ const grant=await login.json();await context.request.delete('/api/admin/v1/auth/session',{headers:{Origin:baseURL,'X-CSRF-Token':grant.csrf_token}});await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)})

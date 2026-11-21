@@ -1,0 +1,21 @@
+// Modified for Ovload on 2026-10-27: workspace integration.
+
+//! 执行引擎各阶段与端口合同的测试入口
+
+mod admission;
+mod connection;
+mod continuation;
+mod coordinator;
+mod execution;
+mod extensions;
+mod middleware;
+mod policy;
+mod provider;
+mod response_control;
+
+use ovload_core::engine::AttemptTrigger;
+
+#[test]
+fn attempt_trigger_names_should_match_ops_event_contract() {
+    assert_eq!(AttemptTrigger::AccountRetry.as_str(), "account_retry");
+}

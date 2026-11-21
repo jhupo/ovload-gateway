@@ -16,7 +16,7 @@ and CPU-heavy work from runtime workers with explicitly limited concurrency.
 See ARCHITECTURE.md and DEVELOPMENT.md for task lifecycle requirements and the
 distinction between the current runtime scaffold and planned provider execution.
 Start with one backend process and explicit module boundaries.
-Use Vue/TypeScript with OpenAPI-generated API types as APIs are implemented.
+Use React/TypeScript with OpenAPI-generated API types as APIs are implemented.
 Provider transports may use different networking libraries when justified.
 Matching implementation languages does not establish matching wire fingerprints.
 

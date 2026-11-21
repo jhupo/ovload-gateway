@@ -1,17 +1,63 @@
 [workspace]
-members = ["crates/ovload-core", "crates/ovload-server"]
+members = [
+    "src/apps",
+    "src/crates/admin",
+    "src/crates/api",
+    "src/crates/core",
+    "src/crates/host",
+    "src/crates/plugin/cli",
+    "src/crates/plugin/runtime",
+    "src/crates/plugin/sdk",
+    "src/crates/protocol",
+    "src/crates/store",
+    "src/crates/providers/http",
+    "src/crates/providers/openai",
+    "src/crates/providers/xai",
+]
+default-members = ["src/apps"]
 resolver = "3"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "LGPL-3.0-only"
+license = "Apache-2.0"
 repository = "https://github.com/jhupo/ovload-gateway"
+publish = false
+rust-version = "1.99.1"
 
-[workspace.dependencies]
-axum = "0.8"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal"] }
-serde = { version = "1", features = ["derive"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-ovload-core = { path = "crates/ovload-core" }
+[workspace.lints.rust]
+warnings = "deny"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = 10 }
+redundant_clone = { level = "deny", priority = 9 }
+large_enum_variant = { level = "warn", priority = 8 }
+needless_collect = { level = "deny", priority = 7 }
+
+[profile.dev]
+debug = true
+
+# Preserve upstream test parameters while accelerating expensive fixture work.
+[profile.dev.package.argon2]
+opt-level = 2
+
+[profile.dev.package.blake2]
+opt-level = 2
+
+[profile.dev.package."sha2@0.11.1"]
+opt-level = 2
+
+[profile.dev.package."miniz_oxide@0.9.1"]
+opt-level = 2
+
+[profile.release]
+debug = false
+strip = "symbols"
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[patch.crates-io]
+# Preserve the imported BEGIN-cancellation rollback fix (SQLx issue 4394).
+sqlx = { git = "https://github.com/transact-rs/sqlx", rev = "f1e94ec34dd5f11ad6488a3a8ac7988439a3f757" }

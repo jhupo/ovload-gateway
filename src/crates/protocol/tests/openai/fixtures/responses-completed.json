@@ -1,0 +1,11 @@
+{
+  "id": "resp_fixture",
+  "created_at": 1700000000,
+  "model": "upstream-text",
+  "status": "completed",
+  "output": [
+    { "type": "message", "id": "msg_fixture", "role": "assistant", "content": [{ "type": "output_text", "text": "synthetic answer", "annotations": [] }] },
+    { "type": "function_call", "id": "fc_fixture", "call_id": "call_fixture", "name": "lookup", "arguments": "{\"key\":\"fixture\"}" }
+  ],
+  "usage": { "input_tokens": 12, "output_tokens": 7, "total_tokens": 19, "input_tokens_details": { "cached_tokens": 3 }, "output_tokens_details": { "reasoning_tokens": 2 } }
+}

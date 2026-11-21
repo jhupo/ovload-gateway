@@ -4,3 +4,16 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
       target: gateway
+      network: host
+      args:
+        HTTP_PROXY: ${OVLOAD_BUILD_PROXY:-}
+        HTTPS_PROXY: ${OVLOAD_BUILD_PROXY:-}
+        NO_PROXY: ${OVLOAD_BUILD_NO_PROXY:-localhost,127.0.0.1,::1}
+        http_proxy: ${OVLOAD_BUILD_PROXY:-}
+        https_proxy: ${OVLOAD_BUILD_PROXY:-}
+        no_proxy: ${OVLOAD_BUILD_NO_PROXY:-localhost,127.0.0.1,::1}
+        CARGO_PROFILE: ${OVLOAD_CARGO_PROFILE:-release}
+        CARGO_BUILD_JOBS: ${OVLOAD_BUILD_JOBS:-0}
+        RUN_BACKEND_TESTS: ${OVLOAD_RUN_BACKEND_TESTS:-false}
+        CPR_GIT_SHA: ${OVLOAD_REVISION:-unknown}
+        CPR_BUILD_TIME: ${OVLOAD_BUILD_TIME:-unknown}

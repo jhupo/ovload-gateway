@@ -1,0 +1,25 @@
+name: ovload-core-test
+services:
+  postgres:
+    image: postgres:17.9-bookworm
+    environment:
+      POSTGRES_USER: ovload
+      POSTGRES_DB: ovload_test
+      POSTGRES_PASSWORD: ${OVLOAD_TEST_PG_PASSWORD:?Set a disposable test password}
+    ports: ['127.0.0.1:55432:5432']
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD, pg_isready, -U, ovload, -d, ovload_test]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  redis:
+    image: redis:7.4.8-bookworm
+    command: [redis-server, --save, '', --maxmemory, 64mb, --maxmemory-policy, noeviction]
+    ports: ['127.0.0.1:56379:6379']
+    tmpfs: [/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 2s
+      retries: 30

@@ -1,45 +1,43 @@
 name: ovload-gateway
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: '3'}
 services:
   gateway:
-    image: ${OVLOAD_IMAGE_PREFIX:-ghcr.io/jhupo/ovload-gateway}:${OVLOAD_VERSION:?Set OVLOAD_VERSION}
+    image: ${OVLOAD_IMAGE:-ovload-gateway:local}
     restart: unless-stopped
+    command: [serve]
     environment:
-      OVLOAD_LISTEN: 0.0.0.0:8080
-      OVLOAD_WEB_DIR: /app/web
-      DATABASE_URL: postgres://ovload:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/ovload
-      REDIS_URL: redis://redis:6379/0
-      RUST_LOG: ${RUST_LOG:-info}
+      CPR_SERVER_HOST: 0.0.0.0
+      CPR_SERVER_PORT: '8080'
+      CPR_WEB_DIST_DIR: /app/web
+      CPR_DATABASE_URL: postgres://ovload@postgres:5432/ovload
+      CPR_REDIS_URL: redis://redis:6379/0
+      CPR_DEPLOYMENT_MODE: docker
+      CPR_UPDATE_EXE_PATH: /usr/local/bin/ovload-gateway
+      CPR_UPDATE_REPOSITORY: jhupo/ovload-gateway
+      CPR_ENABLE_SELF_RESTART: 'false'
+      CPR_IDENTITY_PUBLIC_ORIGIN: ${OVLOAD_PUBLIC_ORIGIN:?Set OVLOAD_PUBLIC_ORIGIN}
+      CPR_ANTIGRAVITY_CLIENT_ID: ${CPR_ANTIGRAVITY_CLIENT_ID:-}
+      CPR_ANTIGRAVITY_CLIENT_SECRET: ${CPR_ANTIGRAVITY_CLIENT_SECRET:-}
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
+    volumes:
+      - type: bind
+        source: ${OVLOAD_CONFIG_DIRECTORY:-../private}
+        target: /app/deploy
+        read_only: true
+        bind: {create_host_path: false}
+      - runtime-data:/app/.runtime
+    ports:
+      - '${OVLOAD_BIND:-0.0.0.0}:${OVLOAD_PORT:-51771}:8080'
     networks: [edge, data]
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs: ['/tmp:uid=10001,gid=10001,mode=1770']
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    stop_grace_period: 30s
-    logging: &logging
-      driver: json-file
-      options: {max-size: 10m, max-file: '3'}
-  caddy:
-    image: ${CADDY_IMAGE:-caddy:2.10.2-alpine}
-    restart: unless-stopped
-    user: '10001:10001'
-    command: [caddy, run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
-    ports: ['${OVLOAD_BIND:-127.0.0.1}:${OVLOAD_PORT:-8080}:8080']
-    depends_on:
-      gateway: {condition: service_healthy}
-    volumes: ['./Caddyfile:/etc/caddy/Caddyfile:ro']
-    networks: [edge]
-    read_only: true
-    tmpfs: ['/tmp:uid=10001,gid=10001', '/data:uid=10001,gid=10001', '/config:uid=10001,gid=10001']
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/readyz']
-      interval: 5s
-      timeout: 3s
-      retries: 20
+    stop_grace_period: 60s
     logging: *logging
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:17.9-bookworm}
@@ -47,21 +45,23 @@ services:
     environment:
       POSTGRES_DB: ovload
       POSTGRES_USER: ovload
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    secrets: [postgres-password]
     volumes: [postgres-data:/var/lib/postgresql/data]
     networks: [data]
     healthcheck:
-      test: [CMD-SHELL, 'pg_isready -U ovload -d ovload']
+      test: [CMD, pg_isready, -U, ovload, -d, ovload]
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
     security_opt: [no-new-privileges:true]
     logging: *logging
   redis:
     image: ${REDIS_IMAGE:-redis:7.4.8-bookworm}
     restart: unless-stopped
     user: redis
-    command: [redis-server, --appendonly, 'yes', --maxmemory, 256mb, --maxmemory-policy, noeviction]
+    command: [redis-server, /run/secrets/redis.conf]
+    secrets: [redis-password, redis.conf]
     volumes: [redis-data:/data]
     networks: [data]
     read_only: true
@@ -69,10 +69,10 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     healthcheck:
-      test: [CMD, redis-cli, ping]
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$(cat /run/secrets/redis-password)" redis-cli ping | grep -qx PONG']
       interval: 5s
       timeout: 3s
-      retries: 20
+      retries: 30
     logging: *logging
 networks:
   edge:
@@ -80,3 +80,11 @@ networks:
 volumes:
   postgres-data:
   redis-data:
+  runtime-data:
+secrets:
+  postgres-password:
+    file: ${OVLOAD_CONFIG_DIRECTORY:-../private}/postgres-password
+  redis-password:
+    file: ${OVLOAD_CONFIG_DIRECTORY:-../private}/redis-password
+  redis.conf:
+    file: ${OVLOAD_CONFIG_DIRECTORY:-../private}/redis.conf

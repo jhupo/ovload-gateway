@@ -1,0 +1,39 @@
+# Modified for Ovload on 2026-10-27: workspace integration.
+
+[package]
+name = "ovload-gateway"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+autotests = false
+
+[[test]]
+name = "main"
+path = "tests/main.rs"
+
+[dependencies]
+ovload-admin = { path = "../crates/admin" }
+ovload-api = { path = "../crates/api" }
+ovload-core = { path = "../crates/core" }
+ovload-host = { path = "../crates/host" }
+ovload-plugin-runtime = { path = "../crates/plugin/runtime" }
+ovload-store = { path = "../crates/store" }
+provider-openai = { path = "../crates/providers/openai" }
+provider-http = { path = "../crates/providers/http" }
+provider-xai = { path = "../crates/providers/xai" }
+serde = { version = "1.0.228", features = ["derive"] }
+secrecy = "0.10.3"
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", default-features = false, features = ["rt-multi-thread"] }
+
+[dev-dependencies]
+config = { version = "0.15.23", default-features = false, features = ["yaml"] }
+serde_json = "1"
+syn = { version = "3.0.3", features = ["full", "visit"] }
+tempfile = "3.27.0"
+tokio-rustls = { version = "=0.26.4", default-features = false }
+
+[lints]
+workspace = true

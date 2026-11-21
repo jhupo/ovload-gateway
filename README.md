@@ -4,34 +4,47 @@ A Rust-based, multi-provider AI gateway with explicit protocol adapters,
 account scheduling, and controlled outbound transports.
 
 ## Status
-Initial scaffold: Axum health endpoint, provider capability contracts, and a
-Vue/TypeScript welcome screen, component review catalog, independent PostgreSQL/Redis
-containers, and SQLx schema migration commands. One app image serves frontend and backend.
-Model forwarding, authentication, scheduling, billing, and provider integrations
-are not implemented yet.
+The backend now uses the imported codex-proxy-rs execution framework, integrated
+into one root workspace. It includes Codex/Grok Build and standard Responses API
+products, Responses HTTP/WS, directional Chat Completions conversion,
+executor-owned account attempts, independent customer/operator identity,
+tenant model keys, wallet reads, financial transactions, live account/group/price
+management, observations and plugins. Automatic retail precharge and settlement
+remain disconnected from execution; subscriptions and commerce retain preview
+surfaces. See [architecture](docs/ARCHITECTURE.md) and the precise
+[API inventory](docs/API.md).
 
 ## Development
-Requires Rust stable, Node.js 22.12+ and pnpm 10.
+Requires Rust 1.99.1, Node.js 22.12+ and pnpm 10.
 ```sh
-cargo run -p ovload-server -- preview
+cargo run --locked -p ovload-gateway -- --help
 pnpm --dir web install
 pnpm --dir web dev
 ```
-Backend: http://127.0.0.1:8080. Vite prints the frontend URL on startup.
-GET /healthz reports process health. The development server binds to localhost.
-Environment variables must be set in the shell; .env is not loaded automatically.
+Serving requires deploy/config.yaml and configured PostgreSQL/Redis; see
+[Development](docs/DEVELOPMENT.md). Build and test on the remote server according
+to [the project workflow](AGENTS.md). [Docker deployment](docs/DEPLOYMENT.md)
+provides one gateway process, PostgreSQL, Redis, and HTTPS ingress, with an
+explicit first-administrator bootstrap. Restarting the gateway may interrupt
+connections.
 
 ## Documentation
+- [Documentation index and implementation status](docs/README.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Development standards](docs/DEVELOPMENT.md)
-- [Design system](docs/DESIGN_SYSTEM.md)
+- [Backend development and abstractions](docs/BACKEND_DEVELOPMENT.md)
+- [Frontend design: React/shadcn-admin](docs/FRONTEND_DESIGN.md)
+- [Gateway plugin development](docs/PLUGINS.md)
+- [HTTP API contracts](docs/API.md)
+- [Backend runtime](docs/BACKEND_RUNTIME.md)
+- [Backend module and directory design](docs/BACKEND_STRUCTURE.md)
 - [Architecture decision](docs/adr/0001-rust-modular-monolith.md)
-- [Agent instructions](AGENTS.md)
 
 ## License
 LGPL-3.0-only. See [LICENSE](LICENSE) for LGPLv3 and [COPYING](COPYING)
 for the incorporated GPLv3 terms.
 Dependencies retain their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The imported Rust backend retains Apache-2.0 in [src/LICENSE-APACHE](src/LICENSE-APACHE).
 
 ## Tests, reports, and releases
 - [Test suites](tests/README.md)
@@ -44,6 +57,6 @@ Dependencies retain their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY
 - [Security policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
 
-Branches and pull requests run checks only. Version tags trigger gated native
-archives, one bundled application GHCR image, and GitHub Releases. No release has been
-published by adding these files. Repository rulesets must be enabled separately.
+The Docker source-build workflow is separate from signed release publication and
+the online update acceptance requirements. No release is published by establishing
+this source baseline. Repository rulesets must be enabled separately.

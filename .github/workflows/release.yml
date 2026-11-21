@@ -67,7 +67,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: cargo build --release --locked -p ovload-server
+      - run: cargo build --release --locked
       - run: pnpm --dir web install --frozen-lockfile
       - run: pnpm --dir web build
       - env:
@@ -86,6 +86,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -112,6 +114,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
+        id: push
         with:
           context: .
           file: deploy/Dockerfile
@@ -126,6 +129,45 @@ jobs:
             org.opencontainers.image.version=${{ needs.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=LGPL-3.0-only
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+        with:
+          cosign-release: v3.1.4
+      - name: Sign the immutable image digest
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"
+      - name: Attest SLSA provenance for the pushed digest
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ steps.image.outputs.name }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+      - name: Verify image signature and provenance identity
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          VERSION: ${{ needs.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_ref="${IMAGE_NAME}@${IMAGE_DIGEST}"
+          identity="https://github.com/jhupo/ovload-gateway/.github/workflows/release.yml@refs/tags/v${VERSION}"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign verify \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            "$image_ref"
+          cosign verify-attestation \
+            --type slsaprovenance1 \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" \
+            "$image_ref"
   publish:
     needs: [version, packages, container]
     runs-on: ubuntu-24.04

@@ -1,0 +1,37 @@
+[package]
+name = "provider-http"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+autotests = false
+
+[dependencies]
+async-stream = "0.3.6"
+async-trait = "0.1.89"
+base64 = "0.23.0"
+bytes = "1.11.1"
+chrono = { version = "0.4.45", features = ["clock", "serde"] }
+futures = "0.3.32"
+getrandom = "0.4.3"
+hex = "0.4.3"
+ovload-admin = { path = "../../admin" }
+ovload-core = { path = "../../core" }
+ovload-protocol = { path = "../../protocol" }
+provider-openai = { path = "../openai" }
+reqwest = { version = "=0.12.28", features = ["json", "stream", "rustls-tls-native-roots", "socks"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.150", features = ["arbitrary_precision", "preserve_order", "raw_value"] }
+sha2 = "0.11.0"
+thiserror = "2.0.18"
+tokio = { version = "=1.53.3", default-features = false, features = ["macros", "net", "rt", "sync", "time"] }
+tracing = "0.1.44"
+uuid = { version = "1.23.3", features = ["v7"] }
+
+[dev-dependencies]
+tokio = { version = "=1.53.3", default-features = false, features = ["macros", "rt-multi-thread", "test-util"] }
+wiremock = "0.6.5"
+
+[lints]
+workspace = true
