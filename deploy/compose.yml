@@ -29,50 +29,14 @@ services:
         read_only: true
         bind: {create_host_path: false}
       - runtime-data:/app/.runtime
+    ports:
+      - '${OVLOAD_BIND:-0.0.0.0}:${OVLOAD_PORT:-51771}:8080'
     networks: [edge, data]
     read_only: true
     tmpfs: ['/tmp:uid=10001,gid=10001,mode=1770']
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     stop_grace_period: 60s
-    logging: *logging
-  caddy:
-    image: ${CADDY_IMAGE:-caddy:2.10.2-alpine}
-    restart: unless-stopped
-    # The official Caddy binary carries cap_net_bind_service. Its image user
-    # (1001:118) can execute it after all ambient capabilities are dropped.
-    user: '1001:118'
-    command: [caddy, run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
-    environment:
-      OVLOAD_PUBLIC_HOST: ${OVLOAD_PUBLIC_HOST:-localhost}
-    depends_on:
-      gateway: {condition: service_healthy}
-    ports: ['${OVLOAD_BIND:-127.0.0.1}:${OVLOAD_PORT:-51771}:8443']
-    volumes:
-      - type: bind
-        source: ./Caddyfile
-        target: /etc/caddy/Caddyfile
-        read_only: true
-        bind: {create_host_path: false}
-      - type: bind
-        source: ${OVLOAD_TLS_DIRECTORY:-../private/tls}
-        target: /etc/caddy/tls
-        read_only: true
-        bind: {create_host_path: false}
-      - caddy-data:/data
-      - caddy-config:/config
-    networks: [edge]
-    read_only: true
-    tmpfs: ['/tmp:uid=10001,gid=10001,mode=1770']
-    cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
-    security_opt: [no-new-privileges:true]
-    healthcheck:
-      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8081/healthz']
-      interval: 10s
-      timeout: 3s
-      retries: 12
-      start_period: 10s
     logging: *logging
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:17.9-bookworm}
@@ -116,8 +80,6 @@ volumes:
   postgres-data:
   redis-data:
   runtime-data:
-  caddy-data:
-  caddy-config:
 secrets:
   postgres-password:
     file: ${OVLOAD_CONFIG_DIRECTORY:-../private}/postgres-password

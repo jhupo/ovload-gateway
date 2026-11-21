@@ -9,17 +9,12 @@ import os
 from pathlib import Path
 import secrets
 import shlex
-import shutil
-import subprocess
 import sys
-import tempfile
 from urllib.parse import urlsplit
 
 
 GATEWAY_UID = 10001
 DATA_UID = 999
-CADDY_UID = 1001
-CADDY_GID = 118
 
 
 def public_origin(value: str) -> str:
@@ -116,50 +111,6 @@ def write_private(path: Path, content: bytes, uid: int, mode: int = 0o400, gid: 
         output.write(content)
 
 
-def tls_material(hostname: str) -> dict[str, bytes]:
-    """Generate a private local CA and an IP/DNS certificate without shell interpolation."""
-    temporary = Path(tempfile.mkdtemp(prefix="ovload-tls-"))
-    try:
-        ca_key = temporary / "ca.key"
-        ca_crt = temporary / "ca.crt"
-        server_key = temporary / "server.key"
-        server_csr = temporary / "server.csr"
-        server_crt = temporary / "server.crt"
-        serial = temporary / "ca.srl"
-        extension = temporary / "server.ext"
-        subject_name = "/CN=" + hostname
-        san = f"IP:{hostname}" if _is_ip_address(hostname) else f"DNS:{hostname}"
-        extension.write_text("subjectAltName=" + san + "\n", encoding="ascii")
-        commands = (
-            ["openssl", "req", "-x509", "-newkey", "rsa:4096", "-nodes", "-days", "3650", "-keyout", str(ca_key), "-out", str(ca_crt), "-subj", "/CN=OVLoad Gateway Local CA", "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign"],
-            ["openssl", "genrsa", "-out", str(server_key), "2048"],
-            ["openssl", "req", "-new", "-key", str(server_key), "-out", str(server_csr), "-subj", subject_name],
-            ["openssl", "x509", "-req", "-in", str(server_csr), "-CA", str(ca_crt), "-CAkey", str(ca_key), "-CAcreateserial", "-CAserial", str(serial), "-out", str(server_crt), "-days", "825", "-sha256", "-extfile", str(extension)],
-        )
-        for command in commands:
-            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {
-            "ca.crt": ca_crt.read_bytes(),
-            "ca.key": ca_key.read_bytes(),
-            "server.key": server_key.read_bytes(),
-            "server-fullchain.crt": server_crt.read_bytes() + ca_crt.read_bytes(),
-        }
-    except (OSError, subprocess.CalledProcessError) as error:
-        raise RuntimeError("openssl is required to generate deployment TLS material") from error
-    finally:
-        shutil.rmtree(temporary, ignore_errors=True)
-
-
-def _is_ip_address(hostname: str) -> bool:
-    import ipaddress
-
-    try:
-        ipaddress.ip_address(hostname)
-    except ValueError:
-        return False
-    return True
-
-
 def initialize(directory: Path, origin: str, login: str) -> None:
     if not directory.is_absolute() or ".." in directory.parts:
         raise ValueError("private directory must be an absolute path without '..'")
@@ -172,11 +123,6 @@ def initialize(directory: Path, origin: str, login: str) -> None:
     directory.mkdir(mode=0o700, exist_ok=True)
     os.chmod(directory, 0o700)
     os.chown(directory, GATEWAY_UID, GATEWAY_UID)
-
-    hostname = urlsplit(origin).hostname
-    if not hostname:
-        raise ValueError("public origin must include a hostname")
-    certificate_files = tls_material(hostname)
 
     owner_password = secrets.token_urlsafe(32)
     database_password = secrets.token_urlsafe(32)
@@ -200,14 +146,6 @@ def initialize(directory: Path, origin: str, login: str) -> None:
     )
     for name, content, uid in files:
         write_private(directory / name, content, uid)
-    tls_directory = directory / "tls"
-    tls_directory.mkdir(mode=0o750)
-    os.chown(tls_directory, CADDY_UID, CADDY_GID)
-    os.chmod(tls_directory, 0o750)
-    write_private(tls_directory / "ca.crt", certificate_files["ca.crt"], CADDY_UID, 0o444, CADDY_GID)
-    write_private(tls_directory / "ca.key", certificate_files["ca.key"], GATEWAY_UID, 0o400, GATEWAY_UID)
-    write_private(tls_directory / "server.key", certificate_files["server.key"], CADDY_UID, 0o400, CADDY_GID)
-    write_private(tls_directory / "server-fullchain.crt", certificate_files["server-fullchain.crt"], CADDY_UID, 0o444, CADDY_GID)
 
 
 def main() -> int:
