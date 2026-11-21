@@ -143,9 +143,10 @@ export function UserAuthForm() {
       <OAuthButtons consent={consent} />
       <HumanVerification />
       <Button
-        type='submit'
+        type='button'
         className='auth-submit mt-2 h-11 w-full'
         disabled={isSubmitting}
+        onClick={() => void handleSubmit(onSubmit, onInvalid)()}
         data-invalid={Object.keys(errors).length > 0}
       >
         <LogIn className='size-4' aria-hidden='true' />
