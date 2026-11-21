@@ -6,6 +6,7 @@ use ovload_host::{ConfigError, HostConfig, LoadableConfig};
 use serde::Deserialize;
 
 const CONFIG_SCHEMA_VERSION: u32 = 1;
+const IDENTITY_PUBLIC_ORIGIN_ENV: &str = "CPR_IDENTITY_PUBLIC_ORIGIN";
 
 /// 顶层配置只组合各包拥有的配置段，不解释任何业务字段
 /// 各启动配置忽略未知字段，允许升级时保留旧配置；已知字段仍按类型和业务约束校验
@@ -30,6 +31,9 @@ impl LoadableConfig for GatewayConfig {
     fn resolve_and_validate(&mut self, source_dir: &std::path::Path) -> Result<(), ConfigError> {
         if self.schema_version != CONFIG_SCHEMA_VERSION {
             return Err(ConfigError::InvalidField("schema_version"));
+        }
+        if let Some(origin) = optional_environment_value(IDENTITY_PUBLIC_ORIGIN_ENV)? {
+            self.api.identity_public_origin = origin;
         }
         if let Some(path) = &mut self.identity_oauth_config_file
             && path.is_relative()
@@ -58,5 +62,14 @@ impl LoadableConfig for GatewayConfig {
             .resolve_and_validate(&runtime_data_dir)
             .map_err(|_| ConfigError::InvalidField("openai"))?;
         Ok(())
+    }
+}
+
+fn optional_environment_value(name: &'static str) -> Result<Option<String>, ConfigError> {
+    match std::env::var(name) {
+        Ok(value) if value.trim().is_empty() => Err(ConfigError::InvalidEnvironment(name)),
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(ConfigError::InvalidEnvironment(name)),
     }
 }

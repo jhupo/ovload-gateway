@@ -42,6 +42,7 @@ OVLOAD_IMAGE=ovload-gateway:local
 OVLOAD_BIND=0.0.0.0
 OVLOAD_PORT=51771
 OVLOAD_PUBLIC_HOST=47.96.235.250
+OVLOAD_PUBLIC_ORIGIN=https://gateway.example.com
 OVLOAD_CONFIG_DIRECTORY=/opt/ovload-gateway/private
 OVLOAD_CARGO_PROFILE=dev
 OVLOAD_BUILD_JOBS=1
@@ -60,8 +61,10 @@ must allow the selected public port.
 The application reads `/app/deploy/config.yaml`, using the schema in
 [`deploy/config.example.yaml`](../deploy/config.example.yaml). The generated
 database and Redis URLs use Compose service names and separate password fields.
-The exact external HTTPS origin, including the port, must match
-`api.identity_public_origin`.
+`OVLOAD_PUBLIC_ORIGIN` overrides `api.identity_public_origin` at runtime. Set it
+to the exact external HTTPS origin, including a non-default port. This keeps the
+canonical browser origin out of the image and lets a domain or IP change be
+handled by editing `deploy.env` and recreating only the gateway container.
 
 ## Build And Bootstrap
 
