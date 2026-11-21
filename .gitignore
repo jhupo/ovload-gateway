@@ -21,6 +21,8 @@ target
 #.idea/
 
 # Ovload local artifacts
+/.runtime/
+/deploy/config.yaml
 /web/node_modules/
 /web/dist/
 *.tsbuildinfo
@@ -39,3 +41,6 @@ __pycache__/
 deploy/backups/
 *.dump
 /output/imagegen/
+/output/
+/test-results/
+/tmp/

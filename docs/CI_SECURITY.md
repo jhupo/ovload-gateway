@@ -1,5 +1,12 @@
 # CI and Security Checks
 
+Baseline status: the checks below are required gates, not evidence that the
+imported backend has passed the existing workflow. [ADR 0015](adr/0015-imported-backend-baseline.md)
+replaces the previous CLI, schema history, toolchain, and release packaging.
+Adapt workflow commands and real-service fixtures before relying on CI or
+publication; the removed backend's upgrade/revert jobs are not validation of
+the imported immutable migrations.
+
 ## Required checks
 - Repository: version consistency, release tooling tests, archived report hashes, workflow syntax.
 - Rust: formatting, Clippy with warnings denied, and HTTP contracts on Linux, Windows, macOS.
@@ -31,4 +38,5 @@ These checks do not prove application security or protocol correctness.
 No production traffic is used in CI. No container restart, deployment, or automatic
 update of a live installation is performed by release jobs.
 
-The storage job executes real PostgreSQL upgrade/revert and migration-history tests.
+Storage validation must execute real PostgreSQL migration-history and recovery
+tests for the imported immutable history. There is no automatic downgrade path.

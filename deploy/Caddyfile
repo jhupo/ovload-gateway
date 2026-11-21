@@ -1,17 +1,26 @@
 {
-	admin off
-	auto_https off
+	admin 127.0.0.1:2019
+	auto_https disable_redirects
 	persist_config off
+	skip_install_trust
 }
 
-:8080 {
-	reverse_proxy gateway:8080 {
-		# Flush streaming responses immediately; no application retry policy here.
-		flush_interval -1
-	}
+:8443 {
+	tls /etc/caddy/tls/server-fullchain.crt /etc/caddy/tls/server.key
 	header {
 		-Server
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy gateway:8080 {
+		flush_interval -1
+	}
+}
+
+# Container-local readiness checks use the same upstream without exposing HTTP.
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	handle /healthz {
+		reverse_proxy gateway:8080
 	}
 }

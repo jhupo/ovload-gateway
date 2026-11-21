@@ -1,0 +1,12 @@
+# Local artifacts and copied reference projects are not application source.
+.runtime/
+.pnpm-store/
+target/
+tmp/
+output/
+test-results/
+reports/
+web/output/
+web/.tanstack/
+web/node_modules/
+web/dist/

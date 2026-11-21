@@ -1,0 +1,107 @@
+// Modified for Ovload on 2026-10-27: workspace integration.
+
+//! 验证管理员认证请求脱敏、会话操作与审计失败处理
+
+use ovload_admin::model::auth::{LoginCommand, LoginError};
+
+use super::AdminTestFixture;
+
+#[tokio::test]
+async fn default_auth_service_should_initialize_login_validate_and_logout() {
+    let fixture = AdminTestFixture::new().await;
+    let service = fixture.services.auth();
+    let session = service
+        .login(
+            LoginCommand::Admin {
+                username: Some("admin_1".to_owned()),
+                password: "strong-admin-password".to_owned(),
+            },
+            std::net::Ipv4Addr::LOCALHOST.into(),
+            None,
+        )
+        .await
+        .expect("login succeeds");
+    assert!(
+        service
+            .session(Some(&session.session_id))
+            .await
+            .expect("validate session")
+            .is_some()
+    );
+    assert_eq!(
+        service
+            .resolve_admin_user_id(Some(&session.session_id))
+            .await
+            .expect("resolve session")
+            .as_deref(),
+        Some("admin_1")
+    );
+    service
+        .logout(&session.session_id)
+        .await
+        .expect("logout session");
+    assert!(
+        !service
+            .session(Some(&session.session_id))
+            .await
+            .expect("validate logged-out session")
+            .is_some()
+    );
+    assert_eq!(fixture.auth.audit_count(), 2);
+}
+
+#[tokio::test]
+async fn default_auth_service_should_verify_only_full_plaintext_admin_key() {
+    let fixture = AdminTestFixture::new().await;
+    let key = format!("admin-{}", "a".repeat(64));
+    fixture.auth.set_api_key(&key);
+
+    assert!(
+        fixture
+            .services
+            .auth()
+            .verify_admin_api_key(&key)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !fixture
+            .services
+            .auth()
+            .verify_admin_api_key("admin-short")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !fixture
+            .services
+            .auth()
+            .verify_admin_api_key(&format!("admin-{}", "b".repeat(64)))
+            .await
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn audit_failure_should_revoke_new_session_before_returning_it() {
+    let fixture = AdminTestFixture::new().await;
+    fixture.auth.fail_audit(true);
+
+    assert_eq!(
+        fixture
+            .services
+            .auth()
+            .login(
+                LoginCommand::Admin {
+                    username: None,
+                    password: "strong-admin-password".to_owned(),
+                },
+                std::net::Ipv4Addr::LOCALHOST.into(),
+                None
+            )
+            .await
+            .expect_err("audit failure rejects login"),
+        LoginError::Unavailable
+    );
+    assert_eq!(fixture.auth.session_count(), 0);
+}

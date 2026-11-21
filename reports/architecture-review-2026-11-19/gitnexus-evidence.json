@@ -1,0 +1,620 @@
+{
+  "generatedAt": "2026-11-18T17:17:49.127Z",
+  "repository": "C:\\Users\\jhupo-pc\\Desktop\\ovload-gateway",
+  "registryName": "ovload-gateway",
+  "results": [
+    {
+      "args": [
+        "context",
+        "apiRequest",
+        "-r",
+        "ovload-gateway",
+        "-f",
+        "web/src/api/client.ts",
+        "-l",
+        "5"
+      ],
+      "status": 0,
+      "elapsedMs": 1242,
+      "stderr": "\n  GitNexus Context (1.6.12)\n{\"level\":40,\"time\":1795022261481,\"name\":\"gitnexus\",\"msg\":\"GitNexus: FTS extension unavailable; continuing without FTS features. load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts.\"}\n",
+      "result": {
+        "status": "found",
+        "symbol": {
+          "uid": "Function:web/src/api/client.ts:apiRequest",
+          "name": "apiRequest",
+          "kind": "Function",
+          "filePath": "web/src/api/client.ts",
+          "startLine": 33,
+          "endLine": 154
+        },
+        "epistemic": "exact",
+        "incoming": {
+          "calls": [
+            {
+              "uid": "File:web/src/api/client.test.ts",
+              "name": "client.test.ts",
+              "filePath": "web/src/api/client.test.ts"
+            },
+            {
+              "uid": "Function:web/src/api/auth-settings.ts:authSettingsApi.load",
+              "name": "load",
+              "filePath": "web/src/api/auth-settings.ts"
+            },
+            {
+              "uid": "Function:web/src/api/auth-settings.ts:authSettingsApi.publicLoad",
+              "name": "publicLoad",
+              "filePath": "web/src/api/auth-settings.ts"
+            },
+            {
+              "uid": "Function:web/src/api/auth-settings.ts:authSettingsApi.update",
+              "name": "update",
+              "filePath": "web/src/api/auth-settings.ts"
+            },
+            {
+              "uid": "Function:web/src/api/customer-usage.ts:exportCustomerUsage",
+              "name": "exportCustomerUsage",
+              "filePath": "web/src/api/customer-usage.ts"
+            }
+          ]
+        },
+        "outgoing": {
+          "calls": [
+            {
+              "uid": "Class:web/src/api/client.ts:ApiError",
+              "name": "ApiError",
+              "filePath": "web/src/api/client.ts"
+            },
+            {
+              "uid": "Function:web/src/components/security-step-up.tsx:ensureStepUp",
+              "name": "ensureStepUp",
+              "filePath": "web/src/components/security-step-up.tsx"
+            },
+            {
+              "uid": "Function:web/src/lib/human-verification.ts:consumeHumanToken",
+              "name": "consumeHumanToken",
+              "filePath": "web/src/lib/human-verification.ts"
+            },
+            {
+              "uid": "Function:web/src/lib/human-verification.ts:resetHumanVerification",
+              "name": "resetHumanVerification",
+              "filePath": "web/src/lib/human-verification.ts"
+            }
+          ],
+          "accesses": [
+            {
+              "uid": "Property:web/src/api/client.ts:RequestOptions.body",
+              "name": "body",
+              "filePath": "web/src/api/client.ts"
+            },
+            {
+              "uid": "Property:web/src/api/client.ts:RequestOptions.body",
+              "name": "body",
+              "filePath": "web/src/api/client.ts"
+            },
+            {
+              "uid": "Property:web/src/api/client.ts:RequestOptions.body",
+              "name": "body",
+              "filePath": "web/src/api/client.ts"
+            },
+            {
+              "uid": "Property:web/src/api/client.ts:RequestOptions.body",
+              "name": "body",
+              "filePath": "web/src/api/client.ts"
+            },
+            {
+              "uid": "Property:web/src/api/client.ts:RequestOptions.body",
+              "name": "body",
+              "filePath": "web/src/api/client.ts"
+            }
+          ]
+        },
+        "processes": [
+          {
+            "id": "proc_0_storagesettings",
+            "name": "StorageSettings → Verification",
+            "step_index": 4,
+            "step_count": 6
+          },
+          {
+            "id": "proc_11_storagesettings",
+            "name": "StorageSettings → Dialog",
+            "step_index": 4,
+            "step_count": 7
+          },
+          {
+            "id": "proc_12_generalsettingspage",
+            "name": "GeneralSettingsPage → ApiError",
+            "step_index": 4,
+            "step_count": 7
+          },
+          {
+            "id": "proc_1_storagesettings",
+            "name": "StorageSettings → EnsureStepUp",
+            "step_index": 4,
+            "step_count": 5
+          },
+          {
+            "id": "proc_204_generalsettingspage",
+            "name": "GeneralSettingsPage → Verification",
+            "step_index": 4,
+            "step_count": 6
+          }
+        ]
+      }
+    },
+    {
+      "args": [
+        "impact",
+        "apiRequest",
+        "-r",
+        "ovload-gateway",
+        "-f",
+        "web/src/api/client.ts",
+        "--summary-only",
+        "--depth",
+        "3"
+      ],
+      "status": 0,
+      "elapsedMs": 1491,
+      "stderr": "\n  GitNexus Impact (1.6.12)\n{\"level\":40,\"time\":1795022262780,\"name\":\"gitnexus\",\"msg\":\"GitNexus: FTS extension unavailable; continuing without FTS features. load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts.\"}\n",
+      "result": {
+        "target": {
+          "id": "Function:web/src/api/client.ts:apiRequest",
+          "name": "apiRequest",
+          "type": "Function",
+          "filePath": "web/src/api/client.ts"
+        },
+        "direction": "upstream",
+        "impactedCount": 156,
+        "risk": "CRITICAL",
+        "riskSharedAxes": "CRITICAL",
+        "riskScale": {
+          "comparableAcrossKinds": true,
+          "unusedAxes": []
+        },
+        "epistemic": "exact",
+        "summary": {
+          "direct": 73,
+          "processes_affected": 9,
+          "modules_affected": 7
+        },
+        "byDepthCounts": {
+          "1": 73,
+          "2": 60,
+          "3": 23
+        },
+        "affected_processes": [
+          {
+            "name": "GeneralSettingsPage",
+            "type": "Function",
+            "filePath": "web/src/features/general-settings/index.tsx",
+            "affected_process_count": 8,
+            "total_hits": 24,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "StorageSettings",
+            "type": "Function",
+            "filePath": "web/src/features/data-backup/storage-settings.tsx",
+            "affected_process_count": 14,
+            "total_hits": 21,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "BalanceForm",
+            "type": "Function",
+            "filePath": "web/src/features/user-recharge/balance-form.tsx",
+            "affected_process_count": 14,
+            "total_hits": 21,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "PaymentSettings",
+            "type": "Function",
+            "filePath": "web/src/features/payment-settings/index.tsx",
+            "affected_process_count": 7,
+            "total_hits": 11,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "SecurityWorkspace",
+            "type": "Function",
+            "filePath": "web/src/features/security-authentication/index.tsx",
+            "affected_process_count": 8,
+            "total_hits": 9,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "GatewaySettingsPage",
+            "type": "Function",
+            "filePath": "web/src/features/gateway-settings/index.tsx",
+            "affected_process_count": 7,
+            "total_hits": 7,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "MailSettings",
+            "type": "Function",
+            "filePath": "web/src/features/mail-settings/index.tsx",
+            "affected_process_count": 7,
+            "total_hits": 7,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "SignIn",
+            "type": "Function",
+            "filePath": "web/src/features/auth/sign-in/index.tsx",
+            "affected_process_count": 5,
+            "total_hits": 5,
+            "earliest_broken_step": 1
+          },
+          {
+            "name": "EndpointPool",
+            "type": "Function",
+            "filePath": "web/src/features/feature-settings/audit-settings.tsx",
+            "affected_process_count": 1,
+            "total_hits": 1,
+            "earliest_broken_step": 1
+          }
+        ],
+        "affected_modules": [
+          {
+            "name": "Components",
+            "hits": 45,
+            "impact": "direct"
+          },
+          {
+            "name": "Api",
+            "hits": 43,
+            "impact": "direct"
+          },
+          {
+            "name": "General-settings",
+            "hits": 9,
+            "impact": "direct"
+          },
+          {
+            "name": "Users",
+            "hits": 6,
+            "impact": "direct"
+          },
+          {
+            "name": "Ui",
+            "hits": 3,
+            "impact": "indirect"
+          },
+          {
+            "name": "Gateway-settings",
+            "hits": 2,
+            "impact": "indirect"
+          },
+          {
+            "name": "Mail-settings",
+            "hits": 2,
+            "impact": "direct"
+          }
+        ]
+      }
+    },
+    {
+      "args": [
+        "context",
+        "--uid",
+        "Impl:src/crates/admin/src/use_case/site_settings.rs:SiteSettingsService",
+        "-r",
+        "ovload-gateway",
+        "-l",
+        "5"
+      ],
+      "status": 0,
+      "elapsedMs": 1193,
+      "stderr": "\n  GitNexus Context (1.6.12)\n{\"level\":40,\"time\":1795022264175,\"name\":\"gitnexus\",\"msg\":\"GitNexus: FTS extension unavailable; continuing without FTS features. load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts.\"}\n",
+      "result": {
+        "status": "found",
+        "symbol": {
+          "uid": "Impl:src/crates/admin/src/use_case/site_settings.rs:SiteSettingsService",
+          "name": "SiteSettingsService",
+          "filePath": "src/crates/admin/src/use_case/site_settings.rs",
+          "startLine": 24,
+          "endLine": 124
+        },
+        "epistemic": "exact",
+        "incoming": {},
+        "outgoing": {
+          "has_method": [
+            {
+              "uid": "Function:src/crates/admin/src/use_case/site_settings.rs:SiteSettingsService.delete_logo#2",
+              "name": "delete_logo",
+              "filePath": "src/crates/admin/src/use_case/site_settings.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/site_settings.rs:SiteSettingsService.engagement_command#2",
+              "name": "engagement_command",
+              "filePath": "src/crates/admin/src/use_case/site_settings.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/site_settings.rs:SiteSettingsService.engagement_view#2",
+              "name": "engagement_view",
+              "filePath": "src/crates/admin/src/use_case/site_settings.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/site_settings.rs:SiteSettingsService.get#1",
+              "name": "get",
+              "filePath": "src/crates/admin/src/use_case/site_settings.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/site_settings.rs:SiteSettingsService.new#2",
+              "name": "new",
+              "filePath": "src/crates/admin/src/use_case/site_settings.rs"
+            }
+          ]
+        },
+        "processes": []
+      }
+    },
+    {
+      "args": [
+        "context",
+        "command",
+        "-r",
+        "ovload-gateway",
+        "-f",
+        "src/crates/store/src/postgres/engagement/commerce.rs",
+        "-l",
+        "5"
+      ],
+      "status": 0,
+      "elapsedMs": 1261,
+      "stderr": "\n  GitNexus Context (1.6.12)\n{\"level\":40,\"time\":1795022265469,\"name\":\"gitnexus\",\"msg\":\"GitNexus: FTS extension unavailable; continuing without FTS features. load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts.\"}\n",
+      "result": {
+        "status": "found",
+        "symbol": {
+          "uid": "Function:src/crates/store/src/postgres/engagement/commerce.rs:command",
+          "name": "command",
+          "kind": "Function",
+          "filePath": "src/crates/store/src/postgres/engagement/commerce.rs",
+          "startLine": 128,
+          "endLine": 348
+        },
+        "epistemic": "exact",
+        "incoming": {},
+        "outgoing": {
+          "calls": [
+            {
+              "uid": "Function:src/crates/admin/src/model/retention.rs:RetentionPolicy.days#1",
+              "name": "days",
+              "filePath": "src/crates/admin/src/model/retention.rs"
+            },
+            {
+              "uid": "Function:src/crates/store/src/postgres/engagement/commerce.rs:assign",
+              "name": "assign",
+              "filePath": "src/crates/store/src/postgres/engagement/commerce.rs"
+            },
+            {
+              "uid": "Function:src/crates/store/src/postgres/engagement/commerce.rs:changed",
+              "name": "changed",
+              "filePath": "src/crates/store/src/postgres/engagement/commerce.rs"
+            },
+            {
+              "uid": "Function:src/crates/store/src/postgres/engagement/commerce.rs:lock_subscription",
+              "name": "lock_subscription",
+              "filePath": "src/crates/store/src/postgres/engagement/commerce.rs"
+            },
+            {
+              "uid": "Function:src/crates/store/src/postgres/engagement/commerce.rs:owner",
+              "name": "owner",
+              "filePath": "src/crates/store/src/postgres/engagement/commerce.rs"
+            }
+          ],
+          "accesses": [
+            {
+              "uid": "Property:src/crates/admin/src/model/identity_access.rs:IdentitySession.id",
+              "name": "id",
+              "filePath": "src/crates/admin/src/model/identity_access.rs"
+            },
+            {
+              "uid": "Property:src/crates/admin/src/model/identity_access.rs:IdentitySession.id",
+              "name": "id",
+              "filePath": "src/crates/admin/src/model/identity_access.rs"
+            },
+            {
+              "uid": "Property:src/crates/admin/src/model/identity_access.rs:IdentitySession.owner",
+              "name": "owner",
+              "filePath": "src/crates/admin/src/model/identity_access.rs"
+            }
+          ]
+        },
+        "processes": []
+      }
+    },
+    {
+      "args": [
+        "context",
+        "complete_authorization",
+        "-r",
+        "ovload-gateway",
+        "-f",
+        "src/crates/admin/src/use_case/credentials/flow.rs",
+        "-l",
+        "5"
+      ],
+      "status": 0,
+      "elapsedMs": 1097,
+      "stderr": "\n  GitNexus Context (1.6.12)\n{\"level\":40,\"time\":1795022266632,\"name\":\"gitnexus\",\"msg\":\"GitNexus: FTS extension unavailable; continuing without FTS features. load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts.\"}\n",
+      "result": {
+        "status": "found",
+        "symbol": {
+          "uid": "Function:src/crates/admin/src/use_case/credentials/flow.rs:super::CredentialsService.complete_authorization#2",
+          "name": "complete_authorization",
+          "kind": "Function",
+          "filePath": "src/crates/admin/src/use_case/credentials/flow.rs",
+          "startLine": 204,
+          "endLine": 243
+        },
+        "epistemic": "exact",
+        "incoming": {
+          "accesses": [
+            {
+              "uid": "Function:src/crates/admin/src/use_case/credentials/flow.rs:super::CredentialsService.complete_authorization#2",
+              "name": "complete_authorization",
+              "filePath": "src/crates/admin/src/use_case/credentials/flow.rs"
+            }
+          ],
+          "has_method": [
+            {
+              "uid": "Impl:src/crates/admin/src/use_case/credentials/flow.rs:super::CredentialsService",
+              "name": "super::CredentialsService",
+              "filePath": "src/crates/admin/src/use_case/credentials/flow.rs"
+            }
+          ]
+        },
+        "outgoing": {
+          "calls": [
+            {
+              "uid": "Function:src/crates/admin/src/use_case/credentials/flow.rs:ProviderCredentials.new#4",
+              "name": "new",
+              "filePath": "src/crates/admin/src/use_case/credentials/flow.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/credentials/flow.rs:super::CredentialsService.publish_authorization#3",
+              "name": "publish_authorization",
+              "filePath": "src/crates/admin/src/use_case/credentials/flow.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/credentials/mod.rs:CredentialsService.for_provider#1",
+              "name": "for_provider",
+              "filePath": "src/crates/admin/src/use_case/credentials/mod.rs"
+            }
+          ],
+          "accesses": [
+            {
+              "uid": "Function:src/crates/admin/src/use_case/credentials/flow.rs:super::CredentialsService.complete_authorization#2",
+              "name": "complete_authorization",
+              "filePath": "src/crates/admin/src/use_case/credentials/flow.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/credentials/flow.rs:super::CredentialsService.publish_authorization#3",
+              "name": "publish_authorization",
+              "filePath": "src/crates/admin/src/use_case/credentials/flow.rs"
+            },
+            {
+              "uid": "Function:src/crates/admin/src/use_case/credentials/mod.rs:CredentialsService.for_provider#1",
+              "name": "for_provider",
+              "filePath": "src/crates/admin/src/use_case/credentials/mod.rs"
+            },
+            {
+              "uid": "Property:src/crates/admin/src/model/provider_credentials.rs:CompleteAuthorization.context",
+              "name": "context",
+              "filePath": "src/crates/admin/src/model/provider_credentials.rs"
+            },
+            {
+              "uid": "Property:src/crates/admin/src/model/provider_credentials.rs:CompleteAuthorization.flow_id",
+              "name": "flow_id",
+              "filePath": "src/crates/admin/src/model/provider_credentials.rs"
+            }
+          ]
+        },
+        "processes": []
+      }
+    },
+    {
+      "args": [
+        "context",
+        "invalidateAccountQueries",
+        "-r",
+        "ovload-gateway",
+        "-f",
+        "web/src/features/accounts/query-cache.ts",
+        "-l",
+        "5"
+      ],
+      "status": 0,
+      "elapsedMs": 1168,
+      "stderr": "\n  GitNexus Context (1.6.12)\n{\"level\":40,\"time\":1795022267777,\"name\":\"gitnexus\",\"msg\":\"GitNexus: FTS extension unavailable; continuing without FTS features. load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts.\"}\n",
+      "result": {
+        "status": "found",
+        "symbol": {
+          "uid": "Function:web/src/features/accounts/query-cache.ts:invalidateAccountQueries",
+          "name": "invalidateAccountQueries",
+          "kind": "Function",
+          "filePath": "web/src/features/accounts/query-cache.ts",
+          "startLine": 14,
+          "endLine": 32
+        },
+        "epistemic": "exact",
+        "incoming": {
+          "calls": [
+            {
+              "uid": "File:web/src/features/accounts/query-cache.test.ts",
+              "name": "query-cache.test.ts",
+              "filePath": "web/src/features/accounts/query-cache.test.ts"
+            },
+            {
+              "uid": "Function:web/src/features/accounts/details.tsx:AccountDetails.consumeReset@220:2",
+              "name": "consumeReset",
+              "filePath": "web/src/features/accounts/details.tsx"
+            },
+            {
+              "uid": "Function:web/src/features/accounts/details.tsx:AccountDetails.refresh@192:2",
+              "name": "refresh",
+              "filePath": "web/src/features/accounts/details.tsx"
+            },
+            {
+              "uid": "Function:web/src/features/accounts/index.tsx:AccountsContent",
+              "name": "AccountsContent",
+              "filePath": "web/src/features/accounts/index.tsx"
+            },
+            {
+              "uid": "Function:web/src/features/accounts/index.tsx:AccountsContent.onSuccess@205:4",
+              "name": "onSuccess",
+              "filePath": "web/src/features/accounts/index.tsx"
+            }
+          ]
+        },
+        "outgoing": {
+          "calls": [
+            {
+              "uid": "Function:web/src/features/accounts/query-cache.ts:invalidateAccountQueries.ownsSession@17:2",
+              "name": "ownsSession",
+              "filePath": "web/src/features/accounts/query-cache.ts"
+            },
+            {
+              "uid": "Function:web/src/features/accounts/query-cache.ts:invalidateAccountQueries.ownsSession@17:2",
+              "name": "ownsSession",
+              "filePath": "web/src/features/accounts/query-cache.ts"
+            }
+          ]
+        },
+        "processes": []
+      }
+    },
+    {
+      "args": [
+        "query",
+        "subscription purchase redemption commerce",
+        "-r",
+        "ovload-gateway",
+        "-l",
+        "3"
+      ],
+      "status": 0,
+      "elapsedMs": 953,
+      "stderr": "\n  GitNexus Query (1.6.12)\n{\"level\":40,\"time\":1795022268951,\"name\":\"gitnexus\",\"msg\":\"GitNexus: FTS extension unavailable; continuing without FTS features. load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts.\"}\n",
+      "result": {
+        "processes": [],
+        "process_symbols": [],
+        "definitions": [],
+        "timing": {
+          "bm25": 1.6,
+          "vector": 8.4,
+          "merge": 0,
+          "symbol_lookup": 0,
+          "ranking": 0,
+          "formatting": 0,
+          "wall": 12
+        },
+        "warning": "FTS extension failed to load — keyword search degraded (load-only policy (no install attempted); LOAD fts failed: Binder exception: Extension: fts is an official extension and has not been installed. You can install it by: install fts). Run `gitnexus doctor` for details, then `gitnexus analyze --repair-fts` with network access to reinstall. (resolved: ovload-gateway/branch:master, indexed 2026-11-18T17:11:33.153Z)"
+      }
+    }
+  ]
+}

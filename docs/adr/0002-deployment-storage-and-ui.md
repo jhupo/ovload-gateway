@@ -15,10 +15,10 @@ explicitly reverting a schema with the currently installed application image.
 Unsupported newer schemas or changed migration history cause startup to fail.
 Redis is not a durable source of truth; no-eviction protects future lease state.
 
-Use PrimeVue styled components with an Aura-based theme and shared semantic tokens.
-Prefer library primitives over handwritten controls or unnecessary wrapper layers.
-The component lab exercises actual library imports before product adoption.
-The prior plan to introduce Reka/shadcn is superseded; do not keep two UI libraries.
+Use the shadcn-admin foundation: shadcn/ui primitives, Tailwind semantic tokens,
+TanStack Router, and its shared theme and layout providers. Prefer library
+primitives over handwritten controls or unnecessary wrapper layers. The existing
+component and route tests exercise the actual library imports before product use.
 
 ## Consequences
 One image controls frontend/backend version alignment. The process requires healthy
@@ -27,3 +27,7 @@ preview mode supports UI development without claiming runtime dependency health.
 Database rollback is a maintenance operation and can lose data; release-specific
 migration review and backup restore tests remain mandatory. Model forwarding,
 billing, a web-based updater, and business schemas are not implemented by this ADR.
+For the accepted blue/green production release contract, ADR 0012 supersedes the
+single-slot application replacement and startup-migration behavior described here.
+The current Compose implementation still follows this ADR's original single-slot
+behavior until the role and release protocol is implemented.

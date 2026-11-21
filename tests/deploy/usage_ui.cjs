@@ -1,0 +1,55 @@
+const fs = require('node:fs')
+const assert = require('node:assert/strict')
+const {createRequire} = require('node:module')
+const {chromium, expect} = createRequire('/src/web/package.json')('@playwright/test')
+const live=process.argv.includes('--live'), baseURL='https://192.168.2.150:'+(live?'19443':'19444')
+const out='/src/test-results/usage-records', prefix=live?'live-':''
+const zh=JSON.parse(fs.readFileSync('/src/web/src/i18n/locales/zh.json','utf8'))
+const checks=[],errors=[]
+async function main(){
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']})
+ const context=await browser.newContext({baseURL,ignoreHTTPSErrors:true,locale:'zh-CN',viewport:{width:1440,height:1000}})
+ await context.addInitScript(()=>{localStorage.setItem('i18nextLng','zh');document.cookie='vite-ui-theme=dark; path=/'})
+ const login=await context.request.post('/api/v1/auth/sessions',{headers:{Origin:baseURL},data:{login:live?'ovload_test_admin':'ovload_usage_verify',password:fs.readFileSync('/verify/administrator.password','utf8').trim()}})
+ assert.equal(login.status(),200)
+ const csrf=(await login.json()).csrf_token
+ const page=await context.newPage()
+ page.on('pageerror',e=>errors.push(e.message))
+ page.on('response',r=>{if(r.url().includes('/api/')&&r.status()>=500)errors.push(r.status()+' '+r.url())})
+ try{
+  await page.goto('/usage');await page.waitForLoadState('networkidle')
+  const records=(await(await context.request.get('/api/admin/usage/records?pageSize=100&currentPage=1')).json()).data.items.filter(r=>r.id.startsWith('usage-demo-20261108-request-'))
+  assert.ok(records.length>=12)
+  for(const label of [zh.usage.user,zh.usage.group,zh.usage.settlement])await expect(page.getByRole('columnheader',{name:label,exact:true})).toBeVisible()
+  await page.screenshot({path:out+'/'+prefix+'usage-desktop.png',fullPage:true})
+  checks.push('Existing usage table shows user, group and settlement columns')
+  for(const source of ['wallet','subscription','pending']){
+   const row=records.find(r=>source==='pending'?r.pendingChargeUsd:r.fundingSource===source)
+   assert.ok(row,source)
+   await page.locator('button[data-request-id="'+row.id+'"]:visible').click()
+   const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible()
+   await dialog.getByRole('tab',{name:zh.usage.billing,exact:true}).click()
+   await expect(dialog.getByText(zh.usage.settlementStates[row.retailState],{exact:true})).toBeVisible()
+   if(source!=='pending')await expect(dialog.getByText(zh.usage.fundingSources[source],{exact:true})).toBeVisible()
+   else await expect(dialog.getByText(new RegExp(zh.usage.pendingCharge))).toBeVisible()
+   await page.screenshot({path:out+'/'+prefix+'usage-'+source+'.png',fullPage:true})
+   await page.keyboard.press('Escape');await expect(dialog).toBeHidden()
+  }
+  checks.push('Wallet, subscription and pending details display distinct settlement evidence')
+  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(250)
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Mobile document overflow')
+  await expect(page.locator('article:visible').getByText(/测试 · 使用统计/).first()).toBeVisible()
+  await page.screenshot({path:out+'/'+prefix+'usage-mobile.png',fullPage:true})
+  const button=page.locator('button[data-request-id]:visible').first();await button.click()
+  const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible()
+  await dialog.getByRole('tab',{name:zh.usage.billing,exact:true}).click()
+  const bounds=await dialog.boundingBox();assert.ok(bounds.x>=-1&&bounds.x+bounds.width<=391)
+  await page.screenshot({path:out+'/'+prefix+'usage-detail-mobile.png',fullPage:true})
+  checks.push('Phone cards and request detail fit without document overflow')
+  assert.deepEqual(errors,[])
+  fs.writeFileSync(out+'/'+prefix+'ui-checks.json',JSON.stringify({passed:true,checks,errors},null,2))
+  for(const check of checks)console.log('PASS '+check)
+ }catch(e){await page.screenshot({path:out+'/'+prefix+'ui-failure.png',fullPage:true});throw e}
+ finally{await context.request.delete('/api/admin/v1/auth/session',{headers:{Origin:baseURL,'X-CSRF-Token':csrf}});await browser.close()}
+}
+main().catch(e=>{console.error(e);process.exit(1)})

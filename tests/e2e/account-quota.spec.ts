@@ -1,0 +1,72 @@
+import { mkdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { test, expect } from '../../web/node_modules/@playwright/test'
+
+for (const mobile of [false, true]) {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`quota windows ${mobile ? 'mobile' : 'desktop'} ${theme}`, async ({ page }) => {
+      await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 })
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
+      await page.addInitScript(() => {
+        sessionStorage.setItem('ovload.admin-preview', 'active')
+        localStorage.setItem('i18nextLng', 'zh')
+      })
+      const errors: string[] = []
+      page.on('pageerror', error => errors.push(error.message))
+      const out = resolve('output/account-actions-qa')
+      await mkdir(out, { recursive: true })
+      const shot = async (state: string) => {
+        await page.screenshot({ path: resolve(out, `${mobile ? 'mobile' : 'desktop'}-${theme}-${state}.png`), animations: 'disabled' })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      }
+      await page.goto('/accounts')
+      const summary = page.locator('[data-account-action="usage-account-1"]').filter({ visible: true })
+      await expect(summary.getByRole('progressbar', { name: /5 小时/ })).toHaveAttribute('aria-valuenow', '24')
+      await expect(summary.getByRole('progressbar', { name: /周额度/ })).toHaveAttribute('aria-valuenow', '42')
+      const actions = page.getByTestId('quota-actions-account-1').filter({ visible: true })
+      await expect(actions.getByText('可重置 4 次', { exact: true })).toBeVisible()
+      await expect(actions.getByRole('button', { name: '查询', exact: true })).toBeDisabled()
+      await shot('list')
+      const groups = page.getByRole('button', { name: '查看 Alice 的全部 6 个分组', exact: true }).filter({ visible: true })
+      await groups.click()
+      const groupList = page.getByRole('list', { name: '分组', exact: true })
+      await expect(groupList.getByRole('listitem')).toHaveCount(6)
+      await shot('groups')
+      await groupList.evaluate(el => el.scrollTop = el.scrollHeight)
+      await shot('groups-scrolled')
+      await page.keyboard.press('Escape')
+      await expect(groups).toBeFocused()
+      await actions.getByRole('button', { name: '重置', exact: true }).click()
+      await expect(page.getByRole('heading', { name: /额度重置/ })).toBeVisible()
+      await shot('reset-direct')
+      await page.keyboard.press('Escape')
+      await expect(actions.getByRole('button', { name: '重置', exact: true })).toBeFocused()
+      await summary.click()
+      let dialog = page.getByRole('dialog')
+      await expect(dialog.getByRole('progressbar', { name: /5 小时/ })).toHaveAttribute('aria-valuenow', '24')
+      await expect(dialog.getByRole('progressbar', { name: /周额度/ })).toHaveAttribute('aria-valuenow', '42')
+      await expect(dialog.getByText('重置时间', { exact: true })).toHaveCount(2)
+      await shot('usage')
+      await dialog.getByRole('button', { name: '重置', exact: true }).click()
+      dialog = page.getByRole('dialog')
+      await expect(dialog.getByRole('progressbar', { name: /5 小时/ })).toHaveAttribute('aria-valuenow', '76')
+      await expect(dialog.getByRole('progressbar', { name: /周额度/ })).toHaveAttribute('aria-valuenow', '58')
+      await shot('reset')
+      await page.keyboard.press('Escape')
+      await page.locator('[data-account-action="usage-account-2"]').filter({ visible: true }).click()
+      dialog = page.getByRole('dialog')
+      await expect(dialog.getByText('上游额度未提供', { exact: true })).toBeVisible()
+      await expect(dialog.getByRole('progressbar')).toHaveCount(0)
+      await shot('unavailable')
+      await expect(dialog.getByText('次数未提供', { exact: true })).toBeVisible()
+      await expect(dialog.getByRole('button', { name: '重置', exact: true })).toBeDisabled()
+      await page.keyboard.press('Escape')
+      const zero = page.getByTestId('quota-actions-account-4').filter({ visible: true })
+      await zero.scrollIntoViewIfNeeded()
+      await expect(zero.getByText('可重置 0 次', { exact: true })).toBeVisible()
+      await expect(zero.getByRole('button', { name: '重置', exact: true })).toBeDisabled()
+      await shot('zero-resets')
+      expect(errors).toEqual([])
+    })
+  }
+}

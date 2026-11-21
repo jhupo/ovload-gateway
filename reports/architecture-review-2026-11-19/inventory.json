@@ -1,0 +1,1013 @@
+{
+  "generatedAt": "2026-11-18T17:17:40.624Z",
+  "repository": "C:\\Users\\jhupo-pc\\Desktop\\ovload-gateway",
+  "scope": "Current working tree, including untracked source. Generated routes and frontend tests excluded from the import graph. Static import/export edges include type-only imports; they are not all runtime cycles. Rust counts include inline tests.",
+  "frontendFiles": 456,
+  "featureCount": 35,
+  "rustProductionFiles": 919,
+  "backendCrates": [
+    {
+      "name": "ovload-admin",
+      "manifest": "src/crates/admin/Cargo.toml",
+      "dependencies": [
+        "ovload-core"
+      ]
+    },
+    {
+      "name": "ovload-api",
+      "manifest": "src/crates/api/Cargo.toml",
+      "dependencies": [
+        "ovload-admin",
+        "ovload-core",
+        "ovload-protocol"
+      ]
+    },
+    {
+      "name": "ovload-core",
+      "manifest": "src/crates/core/Cargo.toml",
+      "dependencies": []
+    },
+    {
+      "name": "ovload-gateway",
+      "manifest": "src/apps/Cargo.toml",
+      "dependencies": [
+        "ovload-admin",
+        "ovload-api",
+        "ovload-core",
+        "ovload-host",
+        "ovload-plugin-runtime",
+        "ovload-store",
+        "provider-openai",
+        "provider-xai"
+      ]
+    },
+    {
+      "name": "ovload-host",
+      "manifest": "src/crates/host/Cargo.toml",
+      "dependencies": [
+        "ovload-admin",
+        "ovload-core"
+      ]
+    },
+    {
+      "name": "ovload-plugin-cli",
+      "manifest": "src/crates/plugin/cli/Cargo.toml",
+      "dependencies": [
+        "ovload-plugin-sdk"
+      ]
+    },
+    {
+      "name": "ovload-plugin-runtime",
+      "manifest": "src/crates/plugin/runtime/Cargo.toml",
+      "dependencies": [
+        "ovload-admin",
+        "ovload-core",
+        "ovload-host",
+        "ovload-plugin-sdk",
+        "ovload-protocol"
+      ]
+    },
+    {
+      "name": "ovload-plugin-sdk",
+      "manifest": "src/crates/plugin/sdk/Cargo.toml",
+      "dependencies": []
+    },
+    {
+      "name": "ovload-protocol",
+      "manifest": "src/crates/protocol/Cargo.toml",
+      "dependencies": []
+    },
+    {
+      "name": "ovload-store",
+      "manifest": "src/crates/store/Cargo.toml",
+      "dependencies": [
+        "ovload-admin",
+        "ovload-core"
+      ]
+    },
+    {
+      "name": "provider-openai",
+      "manifest": "src/crates/providers/openai/Cargo.toml",
+      "dependencies": [
+        "ovload-admin",
+        "ovload-core",
+        "ovload-protocol"
+      ]
+    },
+    {
+      "name": "provider-xai",
+      "manifest": "src/crates/providers/xai/Cargo.toml",
+      "dependencies": [
+        "ovload-admin",
+        "ovload-core",
+        "ovload-protocol"
+      ]
+    }
+  ],
+  "internalFrontendImports": 1888,
+  "crossFeatureImports": [
+    {
+      "from": "web/src/features/user-subscriptions/index.tsx",
+      "to": "web/src/features/settings/components/content-section.tsx",
+      "line": 9,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/user-referrals/index.tsx",
+      "to": "web/src/features/settings/components/content-section.tsx",
+      "line": 17,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/user-redeem/index.tsx",
+      "to": "web/src/features/settings/components/content-section.tsx",
+      "line": 15,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/user-recharge/plan-list.tsx",
+      "to": "web/src/features/subscriptions/data.ts",
+      "line": 12,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/features/lottery/index.tsx",
+      "to": "web/src/features/page-settings/lottery-draft.ts",
+      "line": 31,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/lottery/index.tsx",
+      "to": "web/src/features/page-settings/lottery-start-dialog.tsx",
+      "line": 32,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/user-orders/index.tsx",
+      "to": "web/src/features/settings/components/content-section.tsx",
+      "line": 27,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/usage/index.tsx",
+      "to": "web/src/features/orders/shared.tsx",
+      "line": 68,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/channels/monitoring/index.tsx",
+      "to": "web/src/features/groups/data/groups.ts",
+      "line": 13,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/channels/components/group-selection.tsx",
+      "to": "web/src/features/groups/data/schema.ts",
+      "line": 16,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/general-settings/index.tsx",
+      "to": "web/src/features/auth/use-auth-policy.ts",
+      "line": 22,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/feature-settings/referral-settings.tsx",
+      "to": "web/src/features/users/components/user-identity.tsx",
+      "line": 54,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/security-audit/index.tsx",
+      "to": "web/src/features/feature-settings/audit-draft.ts",
+      "line": 67,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/security-audit/index.tsx",
+      "to": "web/src/features/feature-settings/referral-draft.ts",
+      "line": 68,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/payment-settings/user-offers.tsx",
+      "to": "web/src/features/users/components/user-identity.tsx",
+      "line": 30,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/payment-settings/user-offer-editor.tsx",
+      "to": "web/src/features/users/components/user-identity.tsx",
+      "line": 30,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/page-settings/channel-monitoring-settings.tsx",
+      "to": "web/src/features/channels/data.ts",
+      "line": 11,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/page-settings/channel-monitoring-settings.tsx",
+      "to": "web/src/features/feature-settings/settings-selection-table.tsx",
+      "line": 12,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/features/page-settings/channel-monitoring-draft.ts",
+      "to": "web/src/features/channels/data.ts",
+      "line": 2,
+      "typeOnly": false
+    }
+  ],
+  "lowerLayerFeatureImports": [
+    {
+      "from": "web/src/api/workspace-settings.ts",
+      "to": "web/src/features/feature-settings/audit-draft.ts",
+      "line": 1,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/api/workspace-settings.ts",
+      "to": "web/src/features/feature-settings/referral-draft.ts",
+      "line": 2,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/api/workspace-settings.ts",
+      "to": "web/src/features/page-settings/channel-monitoring-draft.ts",
+      "line": 3,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/api/gateway-settings.ts",
+      "to": "web/src/features/gateway-settings/codex-api.ts",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/api/auth-settings.ts",
+      "to": "web/src/features/general-settings/agreement.ts",
+      "line": 1,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/lib/sign-in-session.ts",
+      "to": "web/src/features/data-backup/restore-state.ts",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/__root.tsx",
+      "to": "web/src/features/data-backup/restore-progress.tsx",
+      "line": 7,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/__root.tsx",
+      "to": "web/src/features/data-backup/restore-state.ts",
+      "line": 8,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/__root.tsx",
+      "to": "web/src/features/errors/general-error.tsx",
+      "line": 9,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/__root.tsx",
+      "to": "web/src/features/errors/not-found-error.tsx",
+      "line": 10,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/hooks/use-engagement.ts",
+      "to": "web/src/features/lottery/data.ts",
+      "line": 5,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/hooks/use-engagement.ts",
+      "to": "web/src/features/referrals/data.ts",
+      "line": 6,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/hooks/use-engagement.ts",
+      "to": "web/src/features/user-referrals/data.ts",
+      "line": 7,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/hooks/use-commerce.ts",
+      "to": "web/src/features/orders/data.ts",
+      "line": 2,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/hooks/use-commerce.ts",
+      "to": "web/src/features/redemption-codes/data.ts",
+      "line": 3,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/hooks/use-commerce.ts",
+      "to": "web/src/features/subscriptions/data.ts",
+      "line": 4,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/hooks/use-settings-options.ts",
+      "to": "web/src/features/users/data/schema.ts",
+      "line": 5,
+      "typeOnly": true
+    },
+    {
+      "from": "web/src/components/profile-dropdown.tsx",
+      "to": "web/src/features/settings/profile/profile-avatar.tsx",
+      "line": 18,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/components/layout/header.tsx",
+      "to": "web/src/features/announcements/inbox.tsx",
+      "line": 7,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/components/layout/data/user-sidebar-data.ts",
+      "to": "web/src/features/settings/navigation.ts",
+      "line": 13,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/users/index.tsx",
+      "to": "web/src/features/users/index.tsx",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/users/index.tsx",
+      "to": "web/src/features/users/data/schema.ts",
+      "line": 4,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/_settings/subscriptions.tsx",
+      "to": "web/src/features/user-subscriptions/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/_settings/settings.tsx",
+      "to": "web/src/features/settings/profile/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/_settings/route.tsx",
+      "to": "web/src/features/settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/_settings/referrals.tsx",
+      "to": "web/src/features/user-referrals/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/_settings/redeem.tsx",
+      "to": "web/src/features/user-redeem/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/_settings/orders.tsx",
+      "to": "web/src/features/user-orders/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/usage.tsx",
+      "to": "web/src/features/user-usage/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/recharge.tsx",
+      "to": "web/src/features/user-recharge/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/lottery.tsx",
+      "to": "web/src/features/lottery/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/dashboard.tsx",
+      "to": "web/src/features/user-dashboard/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/channel-status.tsx",
+      "to": "web/src/features/channel-status/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/user/api-keys.tsx",
+      "to": "web/src/features/api-keys/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/usage.tsx",
+      "to": "web/src/features/usage/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/subscriptions/index.tsx",
+      "to": "web/src/features/subscriptions/index.tsx",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/settings/route.tsx",
+      "to": "web/src/features/settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/settings/index.tsx",
+      "to": "web/src/features/settings/profile/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/security-authentication.tsx",
+      "to": "web/src/features/security-authentication/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/security-audit/index.tsx",
+      "to": "web/src/features/security-audit/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/referrals/withdrawals.tsx",
+      "to": "web/src/features/referrals/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/referrals/rebates.tsx",
+      "to": "web/src/features/referrals/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/referrals/invitations.tsx",
+      "to": "web/src/features/referrals/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/redemption-codes.tsx",
+      "to": "web/src/features/redemption-codes/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/proxies/index.tsx",
+      "to": "web/src/features/proxies/index.tsx",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/payment-settings/index.tsx",
+      "to": "web/src/features/payment-settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/page-settings.tsx",
+      "to": "web/src/features/page-settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/orders/records.tsx",
+      "to": "web/src/features/orders/records.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/orders/plans.tsx",
+      "to": "web/src/features/subscriptions/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/orders/overview.tsx",
+      "to": "web/src/features/orders/overview.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/monitoring.tsx",
+      "to": "web/src/features/monitoring/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/mail-settings.tsx",
+      "to": "web/src/features/mail-settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/lottery.tsx",
+      "to": "web/src/features/lottery/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/groups/index.tsx",
+      "to": "web/src/features/groups/index.tsx",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/groups/index.tsx",
+      "to": "web/src/features/groups/data/schema.ts",
+      "line": 4,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/general-settings.tsx",
+      "to": "web/src/features/general-settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/gateway-settings.tsx",
+      "to": "web/src/features/gateway-settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/feature-settings.tsx",
+      "to": "web/src/features/feature-settings/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/errors/$error.tsx",
+      "to": "web/src/features/errors/forbidden.tsx",
+      "line": 4,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/errors/$error.tsx",
+      "to": "web/src/features/errors/general-error.tsx",
+      "line": 5,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/errors/$error.tsx",
+      "to": "web/src/features/errors/maintenance-error.tsx",
+      "line": 6,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/errors/$error.tsx",
+      "to": "web/src/features/errors/not-found-error.tsx",
+      "line": 7,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/errors/$error.tsx",
+      "to": "web/src/features/errors/unauthorized-error.tsx",
+      "line": 8,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/data-backup.tsx",
+      "to": "web/src/features/data-backup/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/dashboard.tsx",
+      "to": "web/src/features/dashboard/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/channels/monitoring.tsx",
+      "to": "web/src/features/channels/monitoring/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/channel-status.tsx",
+      "to": "web/src/features/channel-status/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/announcements/index.tsx",
+      "to": "web/src/features/announcements/index.tsx",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/_authenticated/accounts/index.tsx",
+      "to": "web/src/features/accounts/index.tsx",
+      "line": 4,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/index.tsx",
+      "to": "web/src/features/auth/sign-in/index.tsx",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(errors)/503.tsx",
+      "to": "web/src/features/errors/maintenance-error.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(errors)/500.tsx",
+      "to": "web/src/features/errors/general-error.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(errors)/404.tsx",
+      "to": "web/src/features/errors/not-found-error.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(errors)/403.tsx",
+      "to": "web/src/features/errors/forbidden.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(errors)/401.tsx",
+      "to": "web/src/features/errors/unauthorized-error.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(auth)/sign-up.tsx",
+      "to": "web/src/features/auth/sign-up/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(auth)/sign-in.tsx",
+      "to": "web/src/features/auth/sign-in/index.tsx",
+      "line": 3,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(auth)/sign-in-2.tsx",
+      "to": "web/src/features/auth/sign-in/sign-in-2.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(auth)/otp.tsx",
+      "to": "web/src/features/auth/otp/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    },
+    {
+      "from": "web/src/routes/(auth)/forgot-password.tsx",
+      "to": "web/src/features/auth/forgot-password/index.tsx",
+      "line": 2,
+      "typeOnly": false
+    }
+  ],
+  "importStronglyConnectedComponents": [
+    [
+      "web/src/api/client.ts",
+      "web/src/components/security-step-up.tsx",
+      "web/src/stores/identity-session.ts"
+    ],
+    [
+      "web/src/components/command-menu.tsx",
+      "web/src/context/search-provider.tsx"
+    ]
+  ],
+  "tableOwners": [
+    "web/src/components/data-table/record-table.tsx",
+    "web/src/components/data-table/collection-table.tsx",
+    "web/src/features/users/components/users-table.tsx",
+    "web/src/features/monitoring/components/system-logs.tsx",
+    "web/src/features/user-usage/index.tsx",
+    "web/src/features/lottery/rounds-table.tsx",
+    "web/src/features/usage/index.tsx",
+    "web/src/features/groups/components/groups-table.tsx",
+    "web/src/features/gateway-settings/pricing-sync-dialog.tsx",
+    "web/src/features/gateway-settings/pricing-settings.tsx",
+    "web/src/features/feature-settings/settings-selection-table.tsx",
+    "web/src/features/security-audit/index.tsx",
+    "web/src/features/referrals/index.tsx",
+    "web/src/features/data-backup/backup-records.tsx",
+    "web/src/features/redemption-codes/index.tsx",
+    "web/src/features/payment-settings/user-offers.tsx",
+    "web/src/features/proxies/index.tsx",
+    "web/src/features/page-settings/lottery-winners-table.tsx",
+    "web/src/features/announcements/index.tsx",
+    "web/src/features/accounts/index.tsx"
+  ],
+  "largestFrontendFiles": [
+    {
+      "file": "web/src/features/feature-settings/audit-settings.tsx",
+      "lines": 1598
+    },
+    {
+      "file": "web/src/features/accounts/details.tsx",
+      "lines": 1318
+    },
+    {
+      "file": "web/src/features/usage/index.tsx",
+      "lines": 953
+    },
+    {
+      "file": "web/src/features/accounts/index.tsx",
+      "lines": 947
+    },
+    {
+      "file": "web/src/features/gateway-settings/pricing-settings.tsx",
+      "lines": 914
+    },
+    {
+      "file": "web/src/features/subscriptions/index.tsx",
+      "lines": 766
+    },
+    {
+      "file": "web/src/features/security-audit/index.tsx",
+      "lines": 742
+    },
+    {
+      "file": "web/src/components/ui/sidebar.tsx",
+      "lines": 729
+    },
+    {
+      "file": "web/src/features/redemption-codes/index.tsx",
+      "lines": 658
+    },
+    {
+      "file": "web/src/features/proxies/index.tsx",
+      "lines": 657
+    },
+    {
+      "file": "web/src/features/announcements/index.tsx",
+      "lines": 647
+    },
+    {
+      "file": "web/src/features/feature-settings/referral-settings.tsx",
+      "lines": 597
+    },
+    {
+      "file": "web/src/features/usage/request-detail.tsx",
+      "lines": 594
+    },
+    {
+      "file": "web/src/features/referrals/index.tsx",
+      "lines": 568
+    },
+    {
+      "file": "web/src/features/dashboard/components/operations.tsx",
+      "lines": 544
+    },
+    {
+      "file": "web/src/features/gateway-settings/pricing-sync-dialog.tsx",
+      "lines": 544
+    },
+    {
+      "file": "web/src/features/gateway-settings/index.tsx",
+      "lines": 544
+    },
+    {
+      "file": "web/src/features/security-authentication/index.tsx",
+      "lines": 519
+    }
+  ],
+  "largestRustProductionFiles": [
+    {
+      "file": "src/crates/core/src/engine/coordinator.rs",
+      "lines": 2991
+    },
+    {
+      "file": "src/crates/providers/openai/src/admin.rs",
+      "lines": 2138
+    },
+    {
+      "file": "src/crates/core/src/engine/execution/service.rs",
+      "lines": 2099
+    },
+    {
+      "file": "src/crates/providers/openai/src/credential/selector.rs",
+      "lines": 1888
+    },
+    {
+      "file": "src/crates/providers/openai/src/provider/failure.rs",
+      "lines": 1697
+    },
+    {
+      "file": "src/crates/core/src/routing/snapshot.rs",
+      "lines": 1670
+    },
+    {
+      "file": "src/crates/providers/xai/src/admin.rs",
+      "lines": 1616
+    },
+    {
+      "file": "src/crates/providers/xai/src/transport/network.rs",
+      "lines": 1601
+    },
+    {
+      "file": "src/crates/providers/openai/src/credential/admin.rs",
+      "lines": 1591
+    },
+    {
+      "file": "src/crates/store/src/postgres/execution/mod.rs",
+      "lines": 1503
+    },
+    {
+      "file": "src/crates/core/src/engine/provider.rs",
+      "lines": 1494
+    },
+    {
+      "file": "src/crates/core/src/account/model.rs",
+      "lines": 1449
+    },
+    {
+      "file": "src/crates/admin/src/model/observability.rs",
+      "lines": 1409
+    },
+    {
+      "file": "src/crates/core/src/error/mod.rs",
+      "lines": 1405
+    }
+  ],
+  "features": [
+    {
+      "name": "gateway-settings",
+      "files": 17
+    },
+    {
+      "name": "accounts",
+      "files": 17
+    },
+    {
+      "name": "users",
+      "files": 16
+    },
+    {
+      "name": "auth",
+      "files": 15
+    },
+    {
+      "name": "groups",
+      "files": 12
+    },
+    {
+      "name": "monitoring",
+      "files": 9
+    },
+    {
+      "name": "subscriptions",
+      "files": 9
+    },
+    {
+      "name": "settings",
+      "files": 9
+    },
+    {
+      "name": "general-settings",
+      "files": 9
+    },
+    {
+      "name": "data-backup",
+      "files": 8
+    },
+    {
+      "name": "page-settings",
+      "files": 8
+    },
+    {
+      "name": "user-subscriptions",
+      "files": 7
+    },
+    {
+      "name": "feature-settings",
+      "files": 6
+    },
+    {
+      "name": "payment-settings",
+      "files": 6
+    },
+    {
+      "name": "announcements",
+      "files": 6
+    },
+    {
+      "name": "orders",
+      "files": 5
+    },
+    {
+      "name": "user-usage",
+      "files": 5
+    },
+    {
+      "name": "user-recharge",
+      "files": 5
+    },
+    {
+      "name": "usage",
+      "files": 5
+    },
+    {
+      "name": "channels",
+      "files": 5
+    },
+    {
+      "name": "channel-status",
+      "files": 5
+    },
+    {
+      "name": "errors",
+      "files": 5
+    },
+    {
+      "name": "proxies",
+      "files": 5
+    },
+    {
+      "name": "mail-settings",
+      "files": 4
+    },
+    {
+      "name": "redemption-codes",
+      "files": 4
+    },
+    {
+      "name": "user-referrals",
+      "files": 3
+    },
+    {
+      "name": "lottery",
+      "files": 3
+    },
+    {
+      "name": "security-authentication",
+      "files": 3
+    },
+    {
+      "name": "user-redeem",
+      "files": 2
+    },
+    {
+      "name": "user-orders",
+      "files": 2
+    },
+    {
+      "name": "dashboard",
+      "files": 2
+    },
+    {
+      "name": "security-audit",
+      "files": 2
+    },
+    {
+      "name": "referrals",
+      "files": 2
+    },
+    {
+      "name": "api-keys",
+      "files": 2
+    },
+    {
+      "name": "user-dashboard",
+      "files": 1
+    }
+  ]
+}

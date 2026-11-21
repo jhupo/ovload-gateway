@@ -1,8 +1,15 @@
 # Versioning and Releases
 
+Current baseline: [ADR 0015](adr/0015-imported-backend-baseline.md) retains the
+imported updater's release/checksum/staging/replacement/restart/rollback flow.
+Project release identity, archive layout, plugin assets, and Docker/CI packaging
+still require adaptation. The output and deployment sections below describe
+the previous scaffold and are not a verified release path for the imported code.
+
 ## Contract
-VERSION, workspace.package.version, web/package.json, and local package entries
-in Cargo.lock must agree. Tags use vX.Y.Z or vX.Y.Z-rc.1.
+VERSION, workspace.package.version, web/package.json, and every local workspace
+package entry in Cargo.lock must agree. All packages inherit the workspace
+version. Tags use vX.Y.Z or vX.Y.Z-rc.1.
 Use python scripts/version.py prepare 0.2.0 to update versioned manifests and
 refresh local lock entries, then add a CHANGELOG section and inspect the diff.
 The script does not commit, tag, push, or release.
@@ -33,6 +40,18 @@ There is no crates.io or npm publication.
 3. With explicit authorization, create and push the matching version tag.
 4. Observe version, CI, security, package, container, and publish jobs.
 5. Verify archive checksums and container digests before deployment.
+
+The accepted update contract in
+[ADR 0015](adr/0015-imported-backend-baseline.md) supersedes ADR 0012's blue/green
+and zero-downtime requirements. Retain artifact/checksum verification, staging,
+replacement, restart, and rollback; active connections may be interrupted.
+Before publication, make updater identity, binary/archive layout, plugin assets,
+Docker configuration and release output agree, then verify the resulting path.
+Deployment acceptance must cover startup failure, application rollback, migration
+failure/recovery, and unchanged independent PostgreSQL/Redis/Caddy services and
+persistent data. A binary rollback never downgrades the database. Protocol
+streaming and customer billing additionally require their relevant contract and
+failure evidence; packaging alone does not establish those guarantees.
 
 Do not move or overwrite published tags. Publish a new version to fix a release.
 Reruns may complete an existing draft; already-published Releases are rejected.

@@ -1,13 +1,193 @@
 # Third-party notices
 
-Application code in this initial scaffold is new; no sub2api application source was copied.
+Application code in the initial scaffold was new. Subsequent source adaptations
+are identified below.
 Architectural reference: https://github.com/Wei-Shaw/sub2api
 The LGPLv3 license document in LICENSE is an unmodified copy of the GNU text,
 also distributed by that repository. COPYING contains the referenced GPLv3 text.
 Dependencies retain their respective licenses. Maintain dependency attribution
 and redistribution notices when packaging releases.
 
+The gateway identity mail adapter uses `lettre` 0.11 under its MIT license.
+Rust package metadata and the Cargo lockfile retain the dependency identity;
+redistributions must include the dependency's license notice.
+
+## Imported codex-proxy-rs backend (2026-10-27)
+
+The backend source under `src/apps`, `src/crates`, and `src/migrations` was
+supplied by the user from https://github.com/zyycn/codex-proxy-rs/tree/main/backend.
+Attribution: codex-proxy-rs contributors. The exact revision of the supplied
+copy has not been independently verified. The imported code is Apache-2.0;
+its complete license is retained in [src/LICENSE-APACHE](src/LICENSE-APACHE).
+The repository's existing LGPL and other component notices remain applicable to
+their respective sources; importing this backend does not replace those notices.
+
+Ovload modifications on 2026-10-27: root workspace integration, flattened
+application paths, library directory and Rust package/import names, synchronized
+package versions, architecture-test paths, sanitized configuration example,
+bounded Windows attempt-error storage, and associated documentation. No
+provider protocol identities or financial behavior are changed by this baseline.
+Migration CRLF line endings from the supplied copy were restored to canonical LF;
+all 33 files match the imported frozen SHA-256 digests without SQL changes or
+digest rewrites. Modified imported source files carry change notices.
+Keep this section and the imported license in source and binary distributions.
+
+The SQLx dependency retains the imported exact Git revision
+`f1e94ec34dd5f11ad6488a3a8ac7988439a3f757` for BEGIN cancellation rollback.
+
+## Sub2API notification email templates (2026-10-18)
+
+The default email document and localized authentication/notification content in
+`web/src/features/mail-settings/templates.ts` and
+`web/src/i18n/locales/{en,zh}.json` adapt the `notificationEmailCard` helper and
+official notification templates from Sub2API:
+https://github.com/Wei-Shaw/sub2api/blob/6e6b5b9a4f98b173fa717a51a18b27e5fcfe740e/backend/internal/service/notification_email_service.go
+
+Upstream revision: `6e6b5b9a4f98b173fa717a51a18b27e5fcfe740e`.
+License: LGPL-3.0-only; the complete LGPLv3 and incorporated GPLv3 texts are
+retained in `LICENSE` and `COPYING`. Attribution: Sub2API contributors.
+Modified for Ovload on 2026-10-18: TypeScript generation, existing Ovload event
+and variable contracts, bilingual greeting/footer, responsive spacing and text
+wrapping, event-specific styling, and sandboxed local
+previews. No Sub2API backend delivery or template-management code is included.
+
+## Sub2API API-key client setup reference (2026-10-26)
+
+The former preview group-to-client mapping, client environment/configuration fields and CCS
+provider-link format (removed when the real model-key UI replaced preview credentials) adapted the
+behavior of Sub2API's `frontend/src/utils/ccswitchImport.ts` and
+`frontend/src/components/keys/UseKeyModal.vue`:
+https://github.com/Wei-Shaw/sub2api/tree/b2f49f2bc325b35a29a3cef715216d45dacc4e9a/frontend/src
+
+Upstream revision: `b2f49f2bc325b35a29a3cef715216d45dacc4e9a`.
+License: LGPL-3.0-only; attribution: Sub2API contributors. Complete license texts
+remain in `LICENSE` and `COPYING`. Ovload uses its existing React/shadcn dialogs,
+explicit sample client mappings, reserved example endpoint and nonfunctional
+sample credentials. It omits upstream usage scripts, hard-coded model defaults,
+additional providers and browser-focus-based installation detection.
+
+## Backend runtime additions (2026-09-21)
+
+Site and personal image settings added on 2026-10-30 directly use the existing
+locked `image` 0.25.10 library (MIT OR Apache-2.0,
+https://github.com/image-rs/image) with only PNG/JPEG/WebP features enabled for this
+caller. URL validation directly uses the existing locked `url` 2.5.8 library
+(MIT OR Apache-2.0, https://github.com/servo/rust-url). These dependencies are
+unmodified; retain their licenses when redistributing dependency sources.
+WebP container preflight additionally uses unmodified `riff` 2.0.0 (MIT,
+Copyright 2018 Francesco Bertolaccini, https://github.com/frabert/riff).
+Its license is included in the crate's source distribution and applies to that
+dependency; retain it when packaging dependency sources or binary notices.
+
+Typed storage, worker and CLI errors directly use unmodified `thiserror` 2.0.20
+(MIT OR Apache-2.0), source https://github.com/dtolnay/thiserror. It was already
+present transitively; its version remains pinned in Cargo.lock. The package's
+minimum supported Rust version is 1.71, below the project's pinned toolchain.
+
+The bounded executor directly uses unmodified `tokio-util` 0.7.19 (MIT,
+copyright Tokio Contributors), source https://github.com/tokio-rs/tokio.
+Distributed lease ownership uses unmodified `uuid` 1.26.1 (MIT OR Apache-2.0),
+source https://github.com/uuid-rs/uuid; copyright 2014 The Rust Project Developers
+and 2018 Ashley Mannix, Christopher Armstrong, Dylan DPC, Hunar Roop Kahlon.
+The existing Redis 1.7.0 dependency now enables its connection manager, bringing
+`arc-swap` 1.9.2 (MIT OR Apache-2.0, copyright 2017 arc-swap developers,
+https://github.com/vorner/arc-swap), `backon` 1.6.0 (Apache-2.0,
+https://github.com/Xuanwo/backon), and `fastrand` 2.5.0 (MIT OR Apache-2.0).
+Resolved versions and transitive packages are pinned in Cargo.lock. Retain each
+crate's license and notices in redistributed dependency sources. The standard
+MIT and Apache-2.0 terms reproduced below remain applicable to these components.
+No database server or Redis server binary is embedded into the application.
+
+## Backend request authentication (2026-10-27)
+
+Model API-key verifier hashing directly uses unmodified `sha2` 0.10.9 from
+RustCrypto, source https://github.com/RustCrypto/hashes. License: MIT OR
+Apache-2.0, verified against the pinned crate's `Cargo.toml`, `LICENSE-MIT` and
+`LICENSE-APACHE`. Attribution: Copyright (c) 2006-2009 Graydon Hoare;
+2009-2013 Mozilla Foundation; 2016 Artyom Pavlov. Its MIT and Apache-2.0 terms
+remain applicable; retain the crate's license files when redistributing sources.
+Cargo.lock pins the dependency. The application uses its SHA-256 implementation
+rather than implementing a cryptographic primitive.
+
+Architecture tests directly use unmodified `syn` 2.0.119, source
+https://github.com/dtolnay/syn, under MIT OR Apache-2.0. The parser was already
+pinned transitively; direct use with its full syntax-tree visitor replaces the
+repository's custom Rust lexical scanner. Retain its upstream license files and
+notices when redistributing dependency sources.
+
+## Customer retail arithmetic (2026-10-29)
+
+Checked retail calculations directly use unmodified `num-bigint` 0.4.8,
+`num-rational` 0.4.2 and `num-traits` 0.2.19 from the Rust Num project:
+https://github.com/rust-num/num-bigint,
+https://github.com/rust-num/num-rational and
+https://github.com/rust-num/num-traits. Their pinned source manifests declare
+MIT OR Apache-2.0. Retain each crate's upstream license files when
+redistributing dependency sources. These crates already existed transitively;
+the Core crate now declares the dependencies it directly consumes. Exact
+integer/rational intermediates avoid overflowing `u128` across the supported
+USD rate and usage quantity range; only the final total is rounded.
+
+## Customer usage CSV export (2026-10-29)
+
+Customer challenge and upstream credential encryption directly use the already resolved `ring` 0.17.14
+library; retain its bundled license and notices with redistributed sources.
+Email syntax validation uses unmodified `email_address` 0.2.9 by Simon Johnston,
+licensed MIT, from https://github.com/johnstonskj/rust-email_address. Its existing
+resolved version remains unchanged; retain its upstream license on redistribution.
+
+The API directly uses unmodified `csv` 1.4.0 and transitive `csv-core` 0.1.13
+from https://github.com/BurntSushi/rust-csv. Their pinned manifests declare
+Unlicense/MIT; redistribution may use the MIT terms. Attribution: Copyright
+(c) 2015 Andrew Gallant. Retain the crates' upstream license files when
+redistributing dependency sources. CSV quoting and record encoding use this
+library; spreadsheet formula escaping is applied before writing customer data.
+
 ## UI dependencies
+
+The previous Vue/PrimeVue frontend was removed in favor of the React foundation
+from `satnaing/shadcn-admin`. The imported baseline is MIT licensed and was taken
+from PR 311 commit `95b8f5ae470f48ec6da862dbc76ba1b7deb73ccc`:
+https://github.com/satnaing/shadcn-admin/tree/95b8f5ae470f48ec6da862dbc76ba1b7deb73ccc
+The repository's `web/` copy is modified for Ovload routes, bilingual resources,
+and the procedural homepage scene. Its upstream `web/LICENSE` is retained.
+
+The monitoring preview adapts the free `Number Ticker 01` component distributed
+through the Shadcn Space registry. Source:
+https://shadcnspace.com/components/number-ticker. The local copy adds locale
+formatting, value updates, accessibility metadata, reduced-motion behavior, and
+tests. It does not include Shadcn Space branding or paid resources.
+
+Shadcn Space Free License terms applicable to that component:
+
+```text
+Copyright (c) 2026 Shadcn Space
+
+Our UI materials are free to use.
+
+You are free to use these components and templates in personal projects,
+commercial projects, and client work. You can also share or distribute them if
+needed.
+
+You can download and use the templates or components, copy the code, change or
+edit it for your needs, share it with others, use it in personal or commercial
+projects, and sell projects that are built using this code. You do not need
+special permission for any of the above.
+
+You must not scam anyone using the Shadcn Space name, pretend the components are
+your original product, use the Shadcn Space brand, logo, or name as your own, or
+misuse or misrepresent Shadcn Space intellectual property.
+
+If you copy or share the software, you must include this copyright notice and
+license text in all copies or important parts of the software.
+
+This software is provided "as is" with no guarantees or promise that everything
+will work perfectly. You use it at your own risk. Shadcn Space is not responsible
+for bugs, data loss, project issues, or damage caused by using the software.
+```
+
+Reviewed 2026-09-26. Full license agreement:
+https://shadcnspace.com/license
 
 Three.js 0.186.0 is an unmodified runtime dependency used to render the procedural
 homepage particle scene. Source: https://github.com/mrdoob/three.js. License: MIT,
@@ -93,7 +273,7 @@ SOFTWARE.
 
 ## Typography, localization, icons, and charts
 
-The following are unmodified package dependencies. Fonts are self-hosted and retain their original names and OFL terms. ECharts and Vue-ECharts currently serve the development catalog.
+The following are unmodified package dependencies. Fonts are self-hosted and retain their original names and OFL terms. ECharts serves the React gateway Dashboard preview. Vue-ECharts is retained here as historical attribution for the removed Vue catalog; it is no longer a runtime dependency.
 
 ### @fontsource-variable/inter 5.3.0
 
@@ -708,17 +888,52 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Repository-local agent skills
+## Documentation references
 
-The skills under `.agents/skills/design-taste-frontend`,
-`.agents/skills/find-skills`, `.agents/skills/frontend-design`, and
-`.agents/skills/web-design-guidelines` were copied from
-https://github.com/openvetta/open-vetta/tree/main/.agents/skills on 2026-09-20.
-They are distributed under the upstream repository's Apache-2.0 terms. The
-`frontend-design` skill includes its upstream `LICENSE.txt`; retain it when
-redistributing that skill. A copy of the same upstream terms is also available
-as `.agents/skills/OPEN_VETTA_LICENSE.txt` for the imported skill set.
+The organization of project development documentation was informed by
+codex-proxy-rs at inspected
+documentation revision `0ceac908f45a4c61c3da32c42e9716c087cb3390`:
+https://github.com/zyycn/codex-proxy-rs/tree/0ceac908f45a4c61c3da32c42e9716c087cb3390
+Ovload's guides are rewritten for its own source ownership, React/shadcn-admin interface and
+authorization rules; upstream Vue/theme/tooling requirements were not adopted.
+This is the inspected documentation reference, not a claim about the exact
+revision of the user-supplied backend source. The imported backend's Apache-2.0
+license remains in `src/LICENSE-APACHE`.
 
-GSAP guidance remains installed in the developer's local Codex skills directory
-and is not vendored into this repository. The GSAP runtime package license and
-attribution remain documented in the UI dependency section above.
+Repository-local agent rules and imported skills have been removed. The GSAP
+runtime package license and attribution remain documented in the UI dependency
+section above.
+
+## react-markdown
+
+The announcement preview uses react-markdown 10.1.0 (MIT),
+https://github.com/remarkjs/react-markdown. Upstream license notices are retained
+in the installed package and its transitive dependency packages. Raw HTML is not
+processed and remote images are disabled in announcement previews.
+
+## Shadcn Space calendar-05
+
+The month/year select calendar in
+`web/src/components/shadcn-space/calendar/calendar-05.tsx` is adapted from
+https://shadcnspace.com/r/calendar-05.json (retrieved 2026-10-05).
+It uses the Shadcn Space Free License reproduced above. The adaptation reuses
+existing primitives, supports controlled values and localizes the calendar.
+
+## Shadcn Space Tabs 06
+
+The website settings navigation in `web/src/components/shadcn-space/tabs/tabs-06.tsx`
+is adapted from https://shadcnspace.com/r/tabs-06.json (retrieved 2026-10-08).
+It uses the Shadcn Space Free License reproduced above. The adaptation adds
+controlled items, localization, responsive keyboard orientation, scoped animation
+identifiers and reduced-motion support, and removes the demonstration content.
+
+## Shadcn Space Switch 07
+
+The labeled switch in `web/src/components/shadcn-space/switch/switch-07.tsx`
+was installed from https://shadcnspace.com/r/switch-07.json and adapted for
+localization, accessible labels and reduced motion. It uses the Shadcn Space
+Free License reproduced above; existing Shadcn Space attribution applies.
+
+## Shadcn Space Button Group 11
+
+The confirmation selector in `web/src/components/shadcn-space/button-group/button-group-11.tsx` is adapted from https://shadcnspace.com/r/button-group-11.json (retrieved 2026-10-09). It uses the Shadcn Space Free License reproduced above. The adaptation uses controlled confirmation options, translated labels, scoped spring animation, and reduced-motion support. The shared ButtonGroup primitive is adapted from the shadcn/ui registry and retains the existing shadcn/ui MIT attribution.

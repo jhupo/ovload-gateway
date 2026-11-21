@@ -1,0 +1,129 @@
+.auth-page {
+  --auth-error: color-mix(in oklab, var(--destructive) 82%, var(--foreground));
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100svh;
+  padding: 64px 24px 40px;
+  background: var(--background);
+}
+.auth-surface {
+  width: min(100%, 384px);
+  display: grid;
+  gap: 20px;
+}
+.auth-brand {
+  display: flex;
+  justify-content: center;
+}
+.auth-card {
+  --field-background: var(--card);
+  border-color: color-mix(in oklab, var(--border) 65%, transparent);
+  background: var(--field-background);
+  gap: 24px;
+  padding-block: 24px;
+}
+.auth-card > [data-slot='card-header'],
+.auth-card > [data-slot='card-content'] {
+  padding-inline: 24px;
+}
+@media (min-width: 640px) {
+  .auth-card {
+    padding-block: 24px;
+  }
+}
+.dark .auth-card {
+  --field-background: color-mix(in oklab, var(--card) 97%, var(--foreground));
+}
+.auth-step {
+  animation: auth-enter 220ms ease-out both;
+}
+.auth-submit {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.auth-submit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--auth-error, var(--destructive));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 380ms ease;
+}
+.auth-submit[data-invalid='true'] {
+  color: white;
+}
+.auth-submit[data-invalid='true']::before {
+  transform: scaleX(1);
+}
+.floating-field {
+  position: relative;
+  border-bottom: 1px solid
+    color-mix(in oklab, var(--border) 80%, var(--muted-foreground));
+}
+.floating-field::after,
+.floating-field::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 2px;
+  background: var(--primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition:
+    transform 380ms ease,
+    background-color 200ms ease;
+}
+.floating-field:focus-within::after {
+  transform: scaleX(1);
+}
+.floating-field::before {
+  z-index: 1;
+  background: var(--auth-error, var(--destructive));
+}
+.floating-field[data-invalid='true']::before {
+  transform: scaleX(1);
+}
+.floating-input:autofill {
+  /* Native autofill backgrounds cannot be replaced with background-color. */
+  box-shadow: 0 0 0 100px var(--field-background, var(--background)) inset;
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  transition: none;
+}
+.floating-input:focus + label,
+.floating-input:not(:placeholder-shown) + label,
+.floating-input:autofill + label {
+  transform: translateY(-19px) scale(0.78);
+  color: var(--foreground);
+}
+.floating-field[data-invalid='true'] label {
+  color: var(--auth-error, var(--destructive));
+}
+@keyframes auth-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-step {
+    animation: none;
+  }
+  .auth-submit::before,
+  .floating-field::after,
+  .floating-field::before,
+  .floating-field label {
+    transition: none;
+  }
+}

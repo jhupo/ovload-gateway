@@ -1,0 +1,994 @@
+// Modified for Ovload on 2026-10-27: workspace integration.
+
+//! OpenAI Responses HTTP 与 SSE adapter
+
+use crate::request_context::request_client_context;
+
+use std::collections::VecDeque;
+use std::net::SocketAddr;
+use std::sync::{Arc, OnceLock};
+
+use axum::{
+    body::Bytes,
+    extract::{Extension, State, connect_info::ConnectInfo},
+    http::{
+        HeaderMap, HeaderName, HeaderValue, StatusCode,
+        header::{CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE},
+    },
+    response::Response,
+};
+use futures::future::BoxFuture;
+use ovload_core::engine::{
+    CommitRequirement, EngineError,
+    execution::{ClientTransport, ExecutionSession, StartedExecution},
+    middleware::{
+        MiddlewareBody, MiddlewareError, MiddlewareFrame, MiddlewareFraming, MiddlewareHeader,
+        MiddlewareResponse,
+    },
+};
+use ovload_core::error::{GatewayError, GatewayErrorKind};
+use ovload_core::event::{ProviderEvent, ProviderResponseHeader};
+use ovload_core::lifecycle::ConnectionGuard;
+use ovload_core::operation::OperationKind;
+use ovload_protocol::openai::sse::{DONE_SSE_FRAME, response_failed_sse_event_with_id};
+
+use crate::ApiState;
+use crate::middleware::headers::encode_headers;
+use crate::openai::middleware::{
+    ExpectedBody, PendingExecution, RequestInput, error_response, finalize_session,
+    into_http_response, into_http_response_with_protocol, invoke_request,
+    pending_execution_response, request_parts,
+};
+use crate::openai::{
+    auth::{authenticate_client, client_access_error_response},
+    error::{
+        engine_error_response, gateway_error_contract, gateway_error_from_engine,
+        gateway_error_response, protocol_error_response,
+    },
+};
+
+use super::{
+    OpenAiResponsesEncoder, ResponseEncodeError,
+    request::{decode_request_with_body, decode_request_with_headers},
+    validation::{ResponseValidationFacts, ResponsesDeliveryValidator, validate_buffered_response},
+};
+
+const OPENAI_PROTOCOL: &str = "openai";
+
+#[derive(Clone, Copy)]
+enum ClientBoundary {
+    Responses,
+    Chat,
+}
+
+impl ClientBoundary {
+    const fn protocol(self) -> &'static str {
+        match self {
+            Self::Responses => OPENAI_PROTOCOL,
+            Self::Chat => "chat_completions",
+        }
+    }
+    const fn endpoint(self) -> &'static str {
+        match self {
+            Self::Responses => crate::openai::router::RESPONSES_PATH,
+            Self::Chat => crate::openai::router::CHAT_COMPLETIONS_PATH,
+        }
+    }
+
+    fn decode(
+        self,
+        body: &[u8],
+        headers: &HeaderMap,
+        limit: usize,
+    ) -> Result<(super::DecodedResponsesRequest, Bytes, bool), super::RequestDecodeError> {
+        match self {
+            Self::Responses => decode_request_with_body(body, headers, limit)
+                .map(|(request, body)| (request, body, false)),
+            Self::Chat => {
+                let source = super::request::decompress_request_body(body, headers, limit)?;
+                let request =
+                    ovload_protocol::openai::chat::convert_request(&source).map_err(|_| {
+                        super::RequestDecodeError::UnsupportedField {
+                            field: "chat_completions".to_owned(),
+                        }
+                    })?;
+                let converted = serde_json::to_vec(&request.responses)
+                    .map_err(|_| super::RequestDecodeError::MalformedJson)?;
+                if converted.len() > limit {
+                    return Err(super::RequestDecodeError::DecompressedBodyTooLarge {
+                        limit_bytes: limit,
+                    });
+                }
+                let mut clean = headers.clone();
+                clean.remove(CONTENT_ENCODING);
+                clean.remove(CONTENT_LENGTH);
+                let decoded = decode_request_with_headers(&converted, &clean, limit)?;
+                Ok((
+                    decoded,
+                    Bytes::copy_from_slice(&source),
+                    request.include_usage,
+                ))
+            }
+        }
+    }
+}
+
+/// `POST /v1/responses`
+pub(crate) async fn responses(
+    State(state): State<ApiState>,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
+    ingress_id: Option<Extension<tower_http::request_id::RequestId>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    responses_boundary(
+        state,
+        connect_info,
+        ingress_id,
+        headers,
+        body,
+        ClientBoundary::Responses,
+    )
+    .await
+}
+
+pub(crate) async fn chat_completions(
+    State(state): State<ApiState>,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
+    ingress_id: Option<Extension<tower_http::request_id::RequestId>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    responses_boundary(
+        state,
+        connect_info,
+        ingress_id,
+        headers,
+        body,
+        ClientBoundary::Chat,
+    )
+    .await
+}
+
+async fn responses_boundary(
+    state: ApiState,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
+    ingress_id: Option<Extension<tower_http::request_id::RequestId>>,
+    headers: HeaderMap,
+    body: Bytes,
+    boundary: ClientBoundary,
+) -> Response {
+    let service = state.openai().clone();
+    let client = match authenticate_client(&service, &headers).await {
+        Ok(client) => client,
+        Err(error) => return client_access_error_response(error),
+    };
+    let maximum_body_bytes = client.snapshot().responses_max_decompressed_body_bytes();
+    let (decoded, middleware_body, _) = match boundary.decode(&body, &headers, maximum_body_bytes) {
+        Ok(decoded) => decoded,
+        Err(error) => {
+            return super::super::error::protocol_error_response(
+                StatusCode::BAD_REQUEST,
+                error.protocol_body(),
+            );
+        }
+    };
+    let execution = service.execution();
+    let prepared = match execution.prepare_execution(client).await {
+        Ok(prepared) => prepared,
+        Err(error) => return gateway_error_response(&error),
+    };
+    let peer_address = connect_info.map(|Extension(ConnectInfo(address))| address);
+    let (client_ip, user_agent) = request_client_context(&headers, peer_address);
+    let stream = decoded.metadata().stream();
+    let transport = if stream {
+        ClientTransport::HttpSse
+    } else {
+        ClientTransport::HttpJson
+    };
+    let model_hint = Some(decoded.metadata().requested_model().to_owned());
+    // 终端会重新校验中间件改写后的正文，初步解码不必保留到响应交付
+    drop(decoded);
+    let request_id = prepared.request_id().clone();
+    let started_request_id = Arc::new(OnceLock::new());
+    let terminal_request_id = Arc::clone(&started_request_id);
+    let (admitted, keepalive) = tokio::sync::oneshot::channel();
+    let mut middleware_headers = headers.clone();
+    // 中间件正文已经由入口按上限解压；传输编码和旧长度不能与改写后的正文混用
+    middleware_headers.remove(CONTENT_ENCODING);
+    middleware_headers.remove(CONTENT_LENGTH);
+    let input = RequestInput {
+        endpoint: boundary.endpoint().to_owned(),
+        protocol: boundary.protocol().to_owned(),
+        operation: Some(OperationKind::Generate),
+        transport,
+        model_hint,
+        headers: encode_headers(&middleware_headers),
+        body: middleware_body,
+    };
+    let terminal_service = service.clone();
+    let validation = ResponseValidationFacts::default();
+    let terminal_validation = validation.clone();
+    let chat_validation = crate::openai::chat::ChatDeliveryFacts::default();
+    let terminal_chat_validation = chat_validation.clone();
+    let middleware = invoke_request(
+        execution,
+        prepared,
+        input,
+        Box::new(move |prepared, request| {
+            Box::pin(async move {
+                let (protocol, request_headers, request_body) = request_parts(request.clone())?;
+                if protocol != boundary.protocol() {
+                    return Err(MiddlewareError::Rejected);
+                }
+                let (decoded, _, include_usage) = boundary
+                    .decode(
+                        &request_body,
+                        &request_headers,
+                        prepared
+                            .client()
+                            .snapshot()
+                            .responses_max_decompressed_body_bytes(),
+                    )
+                    .map_err(|_| MiddlewareError::Rejected)?;
+                let decoded = decoded
+                    .with_client_context(client_ip, user_agent)
+                    .with_middleware_capabilities(&request)?;
+                if decoded.metadata().stream() != stream {
+                    return Err(MiddlewareError::Rejected);
+                }
+                let client_model = decoded.metadata().requested_model().to_owned();
+                let connection_guard = if stream {
+                    Some(
+                        terminal_service
+                            .try_register_connection()
+                            .map_err(|_| MiddlewareError::Fault)?,
+                    )
+                } else {
+                    None
+                };
+                let started = terminal_service
+                    .start_prepared_protocol_response(
+                        prepared,
+                        decoded,
+                        transport,
+                        boundary.endpoint(),
+                        boundary.protocol(),
+                    )
+                    .await
+                    .map_err(MiddlewareError::Gateway)?;
+                let _ = terminal_request_id.set(started.request_id.clone());
+                started.session.trace().headers(
+                    "client.request",
+                    serde_json::json!({
+                        "ingressRequestId": ingress_id.as_ref().and_then(|Extension(id)| id.header_value().to_str().ok()),
+                    }),
+                    request_headers
+                        .iter()
+                        .map(|(name, value)| (name.as_str(), value.as_bytes())),
+                );
+                started
+                    .session
+                    .trace()
+                    .capture("client.request.body", &request_body);
+                let _ = admitted.send(started.session.response_commit());
+                let conversion_trace = started.session.trace();
+                let response = execution_middleware_response(
+                    started,
+                    connection_guard,
+                    terminal_validation.clone(),
+                )
+                .await?;
+                Ok(match boundary {
+                    ClientBoundary::Responses => response,
+                    ClientBoundary::Chat => crate::openai::chat::project_response(
+                        validated_middleware_response(response, terminal_validation, stream),
+                        client_model,
+                        stream,
+                        include_usage,
+                        conversion_trace,
+                        terminal_chat_validation,
+                    ),
+                })
+            })
+        }),
+    );
+    let response = async move {
+        let middleware = middleware.await;
+        let expected = if stream {
+            ExpectedBody::Sse
+        } else {
+            ExpectedBody::SingleJson
+        };
+        match middleware {
+            Ok(response) => {
+                into_http_response_with_protocol(
+                    match boundary {
+                        ClientBoundary::Responses => {
+                            validated_middleware_response(response, validation, stream)
+                        }
+                        ClientBoundary::Chat => crate::openai::chat::validate_response(
+                            response,
+                            chat_validation,
+                            stream,
+                        ),
+                    },
+                    expected,
+                    boundary.protocol(),
+                )
+                .await
+            }
+            Err(error) => error_response(error),
+        }
+    };
+    let response = if stream && matches!(boundary, ClientBoundary::Responses) {
+        super::keepalive::response(response, keepalive).await
+    } else {
+        response.await
+    };
+    super::super::with_model_request_id(response, started_request_id.get().unwrap_or(&request_id))
+}
+
+async fn execution_middleware_response(
+    started: StartedExecution,
+    connection_guard: Option<Box<dyn ConnectionGuard>>,
+    validation: ResponseValidationFacts,
+) -> Result<MiddlewareResponse, MiddlewareError> {
+    let StartedExecution {
+        stream, session, ..
+    } = started;
+    if stream {
+        streaming_execution_middleware_response(session, connection_guard, validation).await
+    } else {
+        drop(connection_guard);
+        buffered_execution_middleware_response(session, validation).await
+    }
+}
+
+async fn buffered_execution_middleware_response(
+    session: Box<dyn ExecutionSession>,
+    validation: ResponseValidationFacts,
+) -> Result<MiddlewareResponse, MiddlewareError> {
+    let mut execution = PendingExecution::new(session);
+    let collected = execution
+        .session_mut()
+        .ok_or(MiddlewareError::InvalidState)?
+        .collect_uncommitted()
+        .await;
+    let events = match collected {
+        Ok(events) => events,
+        Err(error) => {
+            let headers = execution
+                .session_mut()
+                .ok_or(MiddlewareError::InvalidState)?
+                .response_headers()
+                .to_vec();
+            return guarded_engine_error_response(execution, &error, &headers).await;
+        }
+    };
+    let transformed = events.iter().any(ProviderEvent::middleware_transformed);
+    let encoded = match encode_collected_events(&events) {
+        Ok(encoded) => Bytes::from(encoded),
+        Err(error) => {
+            let response =
+                protocol_error_response(StatusCode::INTERNAL_SERVER_ERROR, error.protocol_body());
+            return guarded_http_response(execution, response).await;
+        }
+    };
+    validation.observe_buffered(&events, &encoded);
+    let session = execution
+        .session_mut()
+        .ok_or(MiddlewareError::InvalidState)?;
+    session.trace().record(
+        "downstream.encoded",
+        serde_json::json!({"transport": "http_json", "bytes": encoded.len()}),
+    );
+    session.trace().dump("downstream.body", &encoded);
+    let headers = response_headers(session.response_headers(), false);
+    Ok(pending_execution_response(
+        OPENAI_PROTOCOL.to_owned(),
+        StatusCode::OK.as_u16(),
+        headers,
+        MiddlewareFrame::new(encoded, MiddlewareFraming::JsonDocument, true)
+            .with_transformed(transformed),
+        execution,
+    ))
+}
+
+async fn streaming_execution_middleware_response(
+    session: Box<dyn ExecutionSession>,
+    connection_guard: Option<Box<dyn ConnectionGuard>>,
+    validation: ResponseValidationFacts,
+) -> Result<MiddlewareResponse, MiddlewareError> {
+    let mut body = StreamingExecutionBody::new(session, connection_guard, validation);
+    if let Err(error) = body.prime().await {
+        let headers = body.response_headers().to_vec();
+        let execution = body.take_pending_execution()?;
+        return match error {
+            MiddlewareError::Engine(error) => {
+                guarded_engine_error_response(execution, &error, &headers).await
+            }
+            error => guarded_http_response(execution, error_response(error)).await,
+        };
+    }
+    let headers = response_headers(body.response_headers(), true);
+    Ok(MiddlewareResponse::new(
+        OPENAI_PROTOCOL.to_owned(),
+        StatusCode::OK.as_u16(),
+        headers,
+        Box::new(body),
+    ))
+}
+
+/// 直接驱动测试 session 的非流式交付；生产入口通过同一 MiddlewareResponse 路径
+pub async fn collect_execution_response(session: Box<dyn ExecutionSession>) -> Response {
+    match buffered_execution_middleware_response(session, ResponseValidationFacts::default()).await
+    {
+        Ok(response) => into_http_response(response, ExpectedBody::SingleJson).await,
+        Err(error) => error_response(error),
+    }
+}
+
+/// 直接驱动测试 session 的 SSE 交付；生产入口通过同一 MiddlewareResponse 路径
+pub async fn stream_execution_response(
+    session: Box<dyn ExecutionSession>,
+    connection_guard: Option<Box<dyn ConnectionGuard>>,
+) -> Response {
+    let (admitted, keepalive) = tokio::sync::oneshot::channel();
+    let _ = admitted.send(session.response_commit());
+    super::keepalive::response(
+        async move {
+            match streaming_execution_middleware_response(
+                session,
+                connection_guard,
+                ResponseValidationFacts::default(),
+            )
+            .await
+            {
+                Ok(response) => into_http_response(response, ExpectedBody::Sse).await,
+                Err(error) => error_response(error),
+            }
+        },
+        keepalive,
+    )
+    .await
+}
+
+fn validated_middleware_response(
+    response: MiddlewareResponse,
+    facts: ResponseValidationFacts,
+    streaming: bool,
+) -> MiddlewareResponse {
+    if !(200..300).contains(&response.status_code()) {
+        // 非成功响应沿用通用 SinglePayload 边界，不能套用成功 Responses 终态状态机
+        return response;
+    }
+    let (protocol, status, headers, body, envelope) = response.into_parts();
+    let mut response = MiddlewareResponse::new(
+        protocol,
+        status,
+        headers,
+        Box::new(ValidatedResponsesBody {
+            inner: Some(body),
+            facts,
+            streaming,
+            validator: ResponsesDeliveryValidator::default(),
+            pending: VecDeque::new(),
+            committed: false,
+        }),
+    );
+    if let Some(envelope) = envelope {
+        response = response.with_envelope(envelope);
+    }
+    response
+}
+
+struct ValidatedResponsesBody {
+    inner: Option<Box<dyn MiddlewareBody>>,
+    facts: ResponseValidationFacts,
+    streaming: bool,
+    validator: ResponsesDeliveryValidator,
+    pending: VecDeque<MiddlewareFrame>,
+    committed: bool,
+}
+
+impl ValidatedResponsesBody {
+    async fn fail_stream(&mut self) -> Option<MiddlewareFrame> {
+        if let Some(inner) = self.inner.take() {
+            inner.close().await;
+        }
+        let response_id = self
+            .validator
+            .response_id()
+            .map(str::to_owned)
+            .or_else(|| self.facts.response_id());
+        self.pending.push_back(MiddlewareFrame::new(
+            Bytes::from(response_failed_sse_event_with_id(
+                response_id.as_deref(),
+                "server_error",
+                "middleware_failed",
+                "Response middleware returned an invalid stream.",
+            )),
+            MiddlewareFraming::SseEvent,
+            false,
+        ));
+        self.pending.push_back(done_frame());
+        self.pending.pop_front()
+    }
+}
+
+impl MiddlewareBody for ValidatedResponsesBody {
+    fn next_frame(&mut self) -> BoxFuture<'_, Result<Option<MiddlewareFrame>, MiddlewareError>> {
+        Box::pin(async move {
+            if let Some(frame) = self.pending.pop_front() {
+                return Ok(Some(frame));
+            }
+            let Some(inner) = self.inner.as_mut() else {
+                return Ok(None);
+            };
+            let frame = match inner.next_frame().await {
+                Ok(frame) => frame,
+                Err(error) if self.streaming && self.committed => {
+                    let _ = error;
+                    return Ok(self.fail_stream().await);
+                }
+                Err(error) => return Err(error),
+            };
+            let Some(frame) = frame else {
+                if self.streaming && self.validator.finish_delivery().is_err() {
+                    if self.committed {
+                        return Ok(self.fail_stream().await);
+                    }
+                    return Err(MiddlewareError::InvalidState);
+                }
+                return Ok(None);
+            };
+            let valid = if self.streaming {
+                self.validator
+                    .validate_frame(frame.bytes(), frame.transformed(), &self.facts)
+            } else if frame.transformed() {
+                validate_buffered_response(&self.facts, frame.bytes())
+            } else {
+                Ok(())
+            };
+            if valid.is_err() {
+                if self.streaming && self.committed {
+                    return Ok(self.fail_stream().await);
+                }
+                return Err(MiddlewareError::InvalidState);
+            }
+            Ok(Some(frame))
+        })
+    }
+
+    fn commit_downstream(
+        &mut self,
+        client_status_code: Option<u16>,
+    ) -> BoxFuture<'_, Result<(), MiddlewareError>> {
+        Box::pin(async move {
+            let Some(inner) = self.inner.as_mut() else {
+                return Err(MiddlewareError::InvalidState);
+            };
+            inner.commit_downstream(client_status_code).await?;
+            self.committed = true;
+            Ok(())
+        })
+    }
+
+    fn record_client_status(
+        &mut self,
+        client_status_code: u16,
+    ) -> BoxFuture<'_, Result<(), MiddlewareError>> {
+        Box::pin(async move {
+            match self.inner.as_mut() {
+                Some(inner) => inner.record_client_status(client_status_code).await,
+                None => Ok(()),
+            }
+        })
+    }
+
+    fn is_finalized(&self) -> bool {
+        self.inner.as_ref().is_none_or(|inner| inner.is_finalized())
+    }
+
+    fn close(mut self: Box<Self>) -> BoxFuture<'static, ()> {
+        let inner = self.inner.take();
+        Box::pin(async move {
+            if let Some(inner) = inner {
+                inner.close().await;
+            }
+        })
+    }
+}
+
+fn encode_collected_events(events: &[ProviderEvent]) -> Result<Vec<u8>, ResponseEncodeError> {
+    let response = super::response::collect_response(events)?;
+    serde_json::to_vec(&response).map_err(|_| ResponseEncodeError::Serialization)
+}
+
+async fn guarded_engine_error_response(
+    execution: PendingExecution,
+    error: &EngineError,
+    response_headers: &[ProviderResponseHeader],
+) -> Result<MiddlewareResponse, MiddlewareError> {
+    guarded_http_response(
+        execution,
+        engine_error_response_with_headers(error, response_headers),
+    )
+    .await
+}
+
+async fn guarded_http_response(
+    execution: PendingExecution,
+    response: Response,
+) -> Result<MiddlewareResponse, MiddlewareError> {
+    let (parts, body) = response.into_parts();
+    let bytes = axum::body::to_bytes(body, usize::MAX)
+        .await
+        .map_err(|_| MiddlewareError::Fault)?;
+    Ok(pending_execution_response(
+        OPENAI_PROTOCOL.to_owned(),
+        parts.status.as_u16(),
+        encode_headers(&parts.headers),
+        MiddlewareFrame::new(bytes, MiddlewareFraming::RawBytes, true),
+        execution,
+    ))
+}
+
+fn engine_error_response_with_headers(
+    error: &EngineError,
+    response_headers: &[ProviderResponseHeader],
+) -> Response {
+    let response = engine_error_response(error);
+    let failure_request_ids = ["x-request-id", "x-oai-request-id"]
+        .into_iter()
+        .flat_map(|name| {
+            response
+                .headers()
+                .get_all(name)
+                .iter()
+                .cloned()
+                .map(move |value| (name, value))
+        })
+        .collect::<Vec<_>>();
+    // 失败后仍须交付已采集的 turn state；只隔离 opening 身份，不丢弃会话状态
+    let mut response = apply_provider_response_headers(response, response_headers);
+    response.headers_mut().remove("x-request-id");
+    response.headers_mut().remove("x-oai-request-id");
+    for (name, value) in failure_request_ids {
+        response.headers_mut().append(name, value);
+    }
+    response
+}
+
+fn apply_provider_response_headers(
+    mut response: Response,
+    response_headers: &[ProviderResponseHeader],
+) -> Response {
+    let connection_options = super::response_connection_options(response_headers);
+    for header in response_headers {
+        if !super::response_header_is_forwardable(header.name(), &connection_options) {
+            continue;
+        }
+        let Ok(name) = HeaderName::from_bytes(header.name().as_bytes()) else {
+            continue;
+        };
+        let Ok(value) = HeaderValue::from_bytes(header.value()) else {
+            continue;
+        };
+        response.headers_mut().append(name, value);
+    }
+    response
+}
+
+fn response_headers(
+    provider_headers: &[ProviderResponseHeader],
+    streaming: bool,
+) -> Vec<MiddlewareHeader> {
+    let connection_options = super::response_connection_options(provider_headers);
+    let mut headers = Vec::new();
+    headers.push(MiddlewareHeader::new(
+        CONTENT_TYPE.as_str(),
+        Bytes::from_static(if streaming {
+            b"text/event-stream"
+        } else {
+            b"application/json"
+        }),
+    ));
+    for header in provider_headers {
+        if !super::response_header_is_forwardable(header.name(), &connection_options)
+            || header.name().eq_ignore_ascii_case(CONTENT_TYPE.as_str())
+            || HeaderName::from_bytes(header.name().as_bytes()).is_err()
+            || HeaderValue::from_bytes(header.value()).is_err()
+        {
+            continue;
+        }
+        headers.push(MiddlewareHeader::new(
+            header.name(),
+            Bytes::copy_from_slice(header.value()),
+        ));
+    }
+    headers
+}
+
+struct StreamingExecutionBody {
+    session: Option<Box<dyn ExecutionSession>>,
+    encoder: OpenAiResponsesEncoder,
+    validation: ResponseValidationFacts,
+    pending: VecDeque<MiddlewareFrame>,
+    awaiting_terminal_eof: bool,
+    output_finished: bool,
+    batch_pending: bool,
+    transformed_pending: bool,
+    committed: bool,
+    _connection_guard: Option<Box<dyn ConnectionGuard>>,
+}
+
+impl StreamingExecutionBody {
+    fn new(
+        session: Box<dyn ExecutionSession>,
+        connection_guard: Option<Box<dyn ConnectionGuard>>,
+        validation: ResponseValidationFacts,
+    ) -> Self {
+        Self {
+            session: Some(session),
+            encoder: OpenAiResponsesEncoder::new(),
+            validation,
+            pending: VecDeque::new(),
+            awaiting_terminal_eof: false,
+            output_finished: false,
+            batch_pending: false,
+            transformed_pending: false,
+            committed: false,
+            _connection_guard: connection_guard,
+        }
+    }
+
+    async fn prime(&mut self) -> Result<(), MiddlewareError> {
+        self.fill_pending().await?;
+        if self.pending.is_empty() {
+            return Err(MiddlewareError::InvalidState);
+        }
+        Ok(())
+    }
+
+    fn response_headers(&self) -> &[ProviderResponseHeader] {
+        self.session
+            .as_ref()
+            .map_or(&[], |session| session.response_headers())
+    }
+
+    async fn fill_pending(&mut self) -> Result<(), MiddlewareError> {
+        while self.pending.is_empty() && !self.output_finished {
+            if self.awaiting_terminal_eof {
+                if !self.committed {
+                    // 终态 wire 不能在首字节前被中间件整批移除
+                    return Err(MiddlewareError::InvalidState);
+                }
+                self.verify_terminal_eof().await?;
+                self.pending.push_back(done_frame());
+                self.output_finished = true;
+                continue;
+            }
+            if self.batch_pending {
+                if !self.committed {
+                    self.session
+                        .as_mut()
+                        .ok_or(MiddlewareError::InvalidState)?
+                        .discard_pending_delivery()
+                        .map_err(MiddlewareError::Engine)?;
+                }
+                self.batch_pending = false;
+            }
+            let result = self
+                .session
+                .as_mut()
+                .ok_or(MiddlewareError::InvalidState)?
+                .next_event()
+                .await;
+            let coordinated = match result {
+                Ok(Some(event)) => event,
+                Ok(None) if self.committed && self.is_finalized() => {
+                    self.pending.push_back(done_frame());
+                    self.output_finished = true;
+                    continue;
+                }
+                Ok(None) => return Err(invalid_execution_stream()),
+                Err(error) if self.committed => {
+                    self.push_stream_error(gateway_error_from_engine(&error));
+                    continue;
+                }
+                Err(error) => return Err(MiddlewareError::Engine(error)),
+            };
+            let expected = if self.committed {
+                CommitRequirement::AlreadyCommitted
+            } else {
+                CommitRequirement::CommitBeforeDelivery
+            };
+            if coordinated.commit_requirement() != expected {
+                return Err(invalid_execution_stream());
+            }
+            let mut encoded = VecDeque::new();
+            for event in coordinated.into_provider_events() {
+                self.validation.observe_event(&event);
+                let transformed = self.transformed_pending || event.middleware_transformed();
+                let frames = self.encoder.push_sse(&event);
+                if frames.is_empty() {
+                    self.transformed_pending = transformed;
+                    continue;
+                }
+                encoded.extend(frames.into_iter().map(|bytes| {
+                    MiddlewareFrame::new(bytes, MiddlewareFraming::SseEvent, false)
+                        .with_transformed(transformed)
+                }));
+                self.transformed_pending = false;
+            }
+            self.awaiting_terminal_eof =
+                self.encoder.is_completed() || self.encoder.has_wire_failure();
+            self.batch_pending = !self.committed;
+            if encoded.is_empty() {
+                if !self.committed || self.awaiting_terminal_eof {
+                    return Err(invalid_execution_stream());
+                }
+                continue;
+            }
+            // 已提交的流先确认 Core 终结，避免后续 EOF 验证推翻已交付的成功终态
+            if self.awaiting_terminal_eof && self.committed {
+                self.verify_terminal_eof().await?;
+                encoded.push_back(done_frame());
+                self.output_finished = true;
+            }
+            self.pending = encoded;
+        }
+        Ok(())
+    }
+
+    async fn verify_terminal_eof(&mut self) -> Result<(), MiddlewareError> {
+        let result = self
+            .session
+            .as_mut()
+            .ok_or(MiddlewareError::InvalidState)?
+            .next_event()
+            .await;
+        match result {
+            Ok(None) if self.is_finalized() => Ok(()),
+            Err(_) if self.encoder.has_wire_failure() && self.is_finalized() => Ok(()),
+            Ok(_) => Err(invalid_execution_stream()),
+            Err(error) => Err(MiddlewareError::Engine(error)),
+        }
+    }
+
+    fn push_stream_error(&mut self, error: GatewayError) {
+        let (_, default_type, default_code) = gateway_error_contract(error.kind());
+        self.pending.push_back(MiddlewareFrame::new(
+            Bytes::from(response_failed_sse_event_with_id(
+                self.encoder.response_id(),
+                error.client_error_type().unwrap_or(default_type),
+                super::super::error::client_error_code(
+                    error.client_error_code().unwrap_or(default_code),
+                ),
+                error.client_message(),
+            )),
+            MiddlewareFraming::SseEvent,
+            false,
+        ));
+        self.pending.push_back(done_frame());
+        self.output_finished = true;
+    }
+
+    fn take_session_for_close(&mut self) -> Option<Box<dyn ExecutionSession>> {
+        self.session.take()
+    }
+
+    fn take_pending_execution(&mut self) -> Result<PendingExecution, MiddlewareError> {
+        self.take_session_for_close()
+            .map(PendingExecution::new)
+            .ok_or(MiddlewareError::InvalidState)
+    }
+}
+
+impl MiddlewareBody for StreamingExecutionBody {
+    fn next_frame(&mut self) -> BoxFuture<'_, Result<Option<MiddlewareFrame>, MiddlewareError>> {
+        Box::pin(async move {
+            if let Some(frame) = self.pending.pop_front() {
+                return Ok(Some(frame));
+            }
+            if self.output_finished {
+                return Ok(None);
+            }
+            if let Err(error) = self.fill_pending().await {
+                if !self.committed {
+                    return Err(error);
+                }
+                let error = match error {
+                    MiddlewareError::Gateway(error) => error,
+                    MiddlewareError::Engine(error) => gateway_error_from_engine(&error),
+                    _ => GatewayError::new(
+                        GatewayErrorKind::Internal,
+                        "gateway response stream could not be delivered",
+                    ),
+                };
+                self.push_stream_error(error);
+            }
+            Ok(self.pending.pop_front())
+        })
+    }
+
+    fn commit_downstream(
+        &mut self,
+        client_status_code: Option<u16>,
+    ) -> BoxFuture<'_, Result<(), MiddlewareError>> {
+        Box::pin(async move {
+            if self.committed {
+                return Ok(());
+            }
+            self.session
+                .as_mut()
+                .ok_or(MiddlewareError::InvalidState)?
+                .commit_downstream(client_status_code)
+                .await
+                .map_err(MiddlewareError::Engine)?;
+            self.committed = true;
+            self.batch_pending = false;
+            Ok(())
+        })
+    }
+
+    fn record_client_status(
+        &mut self,
+        client_status_code: u16,
+    ) -> BoxFuture<'_, Result<(), MiddlewareError>> {
+        Box::pin(async move {
+            let Some(session) = self.session.as_mut() else {
+                return Ok(());
+            };
+            session
+                .record_client_status(client_status_code)
+                .await
+                .map_err(MiddlewareError::Engine)
+        })
+    }
+
+    fn is_finalized(&self) -> bool {
+        self.session
+            .as_ref()
+            .is_none_or(|session| session.is_finalized())
+    }
+
+    fn close(mut self: Box<Self>) -> BoxFuture<'static, ()> {
+        let session = self.take_session_for_close();
+        Box::pin(async move {
+            if let Some(session) = session {
+                finalize_session(session).await;
+            }
+        })
+    }
+}
+
+impl Drop for StreamingExecutionBody {
+    fn drop(&mut self) {
+        let Some(session) = self.take_session_for_close() else {
+            return;
+        };
+        session.cancel();
+        let finalize = session.detach_finalize();
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            drop(runtime.spawn(finalize));
+        }
+    }
+}
+
+fn done_frame() -> MiddlewareFrame {
+    MiddlewareFrame::new(
+        Bytes::from_static(DONE_SSE_FRAME.as_bytes()),
+        MiddlewareFraming::SseEvent,
+        true,
+    )
+}
+
+fn invalid_execution_stream() -> MiddlewareError {
+    MiddlewareError::Gateway(GatewayError::new(
+        GatewayErrorKind::Internal,
+        "gateway response stream violated its execution lifecycle",
+    ))
+}

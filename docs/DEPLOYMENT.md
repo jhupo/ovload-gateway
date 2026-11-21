@@ -1,80 +1,151 @@
 # Docker Deployment
 
-Status: infrastructure scaffold. Model forwarding and management authentication
-are not implemented. Evaluate on localhost; do not expose it as a production gateway.
+The Compose application consists of one Rust gateway serving the API and frontend,
+PostgreSQL, Redis, and Caddy. Only Caddy publishes a host port. The gateway uses
+`serve`, applies SQLx migrations during store startup, and exposes `/healthz`.
+There is no separate worker or migration command.
 
-## Topology
-One `gateway` image contains Rust and compiled frontend assets. A separate Caddy
-container publishes the HTTP entrypoint and proxies to gateway. PostgreSQL and Redis
-are separate containers with separate persistent named volumes. Neither database
-publishes a host port. An internal data network isolates them; gateway and Caddy join the edge network. Redis uses AOF and noeviction; this protects future leases
-from silent eviction. PostgreSQL initialization uses the official entrypoint, which
-starts as root to prepare volume ownership and drops to its database user.
-The application, Caddy, and Redis run non-root with read-only root filesystems, dropped
-capabilities, and no-new-privileges. All services have bounded logs and health checks.
+Run builds, dependency installation, and application tests on the remote test
+server as required by [the project workflow](../AGENTS.md). The commands below
+run on a Linux Docker host with Docker Compose and BuildKit. Keep the source in
+`/opt/ovload-gateway/source`; keep private configuration and the Compose environment
+outside the source directory.
 
-## Start
-From deploy/, copy `.env.example` to `.env`, set a strong random hexadecimal
-POSTGRES_PASSWORD, and select a published OVLOAD_VERSION without the v prefix.
-The password must be URL-safe because it is part of DATABASE_URL. Never commit .env.
-Changing this variable does not rotate the password in an already initialized database.
+## Initial Configuration
+
+From the source directory, initialize a new installation as root:
 
 ```sh
-docker compose config --quiet
-docker compose pull
-docker compose up -d --wait
-curl --fail http://127.0.0.1:8080/readyz
+python3 scripts/initialize_docker.py \
+  --directory /opt/ovload-gateway/private \
+  --public-origin https://47.96.235.250:51771 \
+  --owner-login admin
 ```
 
-Open http://127.0.0.1:8080. Migrations run before serving requests. Infrastructure
-versions are pinned separately from OVLOAD_VERSION. For local builds set the latter
-to dev and run `docker compose -f compose.yml -f compose.build.yml up -d --build --wait`.
-No local command publishes images. Only version tags publish GHCR and Releases.
+The initializer generates private `config.yaml`, a persistent 32-byte provider
+credential key, PostgreSQL and Redis passwords, Redis configuration, and an
+initial owner password. It refuses to replace existing private files. Preserve
+the provider credential key together with database backups: encrypted provider
+credentials cannot be recovered without it.
 
-## Update only the application
-Read release notes and follow [database backup and recovery](DATABASE.md) first.
-Record the current image digest/schema version, stop gateway, and take a verified
-backup. Update only OVLOAD_VERSION in .env, then:
+The private directory is accessible to gateway UID 10001. Gateway configuration,
+key, and owner password files are owned by UID 10001 with mode `0400`; PostgreSQL
+and Redis secret files are owned by UID 999 with mode `0400`. Compose mounts these
+files into their respective containers. Do not put passwords in image build
+arguments, database URLs, source control, or deployment logs.
+
+Copy `deploy/.env.example` to `/opt/ovload-gateway/deploy.env` and configure:
+
+```dotenv
+OVLOAD_IMAGE=ovload-gateway:local
+OVLOAD_BIND=0.0.0.0
+OVLOAD_PORT=51771
+OVLOAD_PUBLIC_HOST=47.96.235.250
+OVLOAD_CONFIG_DIRECTORY=/opt/ovload-gateway/private
+OVLOAD_CARGO_PROFILE=dev
+OVLOAD_BUILD_JOBS=1
+OVLOAD_RUN_BACKEND_TESTS=true
+OVLOAD_REVISION=<source-commit>
+OVLOAD_BUILD_TIME=<UTC-build-time>
+```
+
+Keep the infrastructure image versions from the example unless deliberately
+upgrading them. Set `OVLOAD_BUILD_PROXY` only when the build needs a network proxy;
+the standard proxy arguments apply to build steps and are not runtime settings.
+Leave `OVLOAD_BIND=127.0.0.1` when another host ingress should be the only caller.
+The host firewall and any upstream NAT must allow the selected public port.
+
+The application reads `/app/deploy/config.yaml`, using the schema in
+[`deploy/config.example.yaml`](../deploy/config.example.yaml). The generated
+database and Redis URLs use Compose service names and separate password fields.
+The exact external HTTPS origin, including the port, must match
+`api.identity_public_origin`.
+
+## Build And Bootstrap
+
+Validate and build from `/opt/ovload-gateway/source`:
 
 ```sh
-docker compose pull gateway
-docker compose up -d --no-deps --wait gateway
-curl --fail http://127.0.0.1:8080/readyz
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml -f deploy/compose.build.yml config --quiet
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml -f deploy/compose.build.yml build gateway
 ```
 
-This replaces the frontend and backend together without recreating PostgreSQL or
-Redis. Database migrations can still change the schema, so container independence
-does not remove the backup requirement. Infrastructure upgrades are separate.
-The scaffold provides this operator-driven procedure, not an in-app online updater.
+The image builds the frontend and Rust binary on the server. Cargo object files
+use a BuildKit tmpfs and do not consume a persistent image layer. Ensure sufficient
+RAM; the 32 GB test server uses the stripped `dev` profile with one build job.
+`OVLOAD_RUN_BACKEND_TESTS=true` also runs the explicitly selected gateway
+`bootstrap::` regression tests before building the binary.
 
-## Rollback and operations
-Follow DATABASE.md: stop writers, revert reviewed migrations with the new image or
-restore a tested backup, then select the previous app version and recreate gateway.
-Do not automatically downgrade on startup failure. Never run `down -v` for updates.
-`docker compose down` preserves named volumes; `logs --tail=100` shows diagnostics.
-/healthz reports process liveness; /readyz checks PostgreSQL and Redis. A failed
-healthcheck does not itself restart a container. SIGTERM drains HTTP connections.
-Public deployments need TLS termination and implemented authentication first.
+Initialize the two new Caddy volumes before its first start:
 
-## Native archives
-Archives contain the binary and web/ assets. Set OVLOAD_WEB_DIR to the extracted
-web/ path plus DATABASE_URL and REDIS_URL, then run `ovload-gateway serve`.
-The explicit loopback-only `preview` command serves health for frontend development.
-Linux native packages require Ubuntu 24.04-compatible glibc; containers use Debian.
-The macOS archive targets Apple Silicon. Retain LICENSE, COPYING, and attribution.
+```sh
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml run --rm --no-deps --user 0 --cap-add CHOWN \
+  --entrypoint sh caddy -c 'chown -R 10001:10001 /data /config'
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml up -d --wait postgres redis
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml run --rm --no-deps gateway \
+  identity bootstrap-owner admin --password-file /app/deploy/owner-password
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml up -d --wait gateway caddy
+```
 
-All Docker configuration lives under deploy/. Build context is the repository root.
+The first management administrator is a database identity created by
+`identity bootstrap-owner`, not automatically created or reset by an environment
+variable. Bootstrap succeeds only when no management principals exist. Changing
+the legacy `admin.default_username` or `admin.default_password` configuration does
+not reset an existing management account. Use the generated private
+`owner-password` through a secure administrative channel for the first login.
 
-## Caddy ingress
-`deploy/Caddyfile` is the only reverse-proxy configuration. Caddy forwards to
-gateway:8080; only its localhost-bound port is published. Its image version is
-independent of OVLOAD_VERSION, so replacing gateway does not recreate Caddy.
-The admin endpoint is disabled. Streaming responses flush immediately and no
-proxy-level retries are added. Protocol-specific gateway support still requires
-its own implementation and tests.
+## HTTPS And Verification
 
-The provided Caddyfile deliberately serves HTTP for local evaluation. It does not
-provision certificates. For production, configure the real domain, HTTP/HTTPS host
-ports, persistent writable certificate storage, and TLS before exposing the site.
-The current /data and /config mounts are temporary because this profile has no TLS
-state. Do not use temporary certificate storage for a production HTTPS deployment.
+The default Caddy configuration uses its own internal certificate authority.
+Management sessions require secure cookies, so access this deployment through
+`https://47.96.235.250:51771`. Export the CA's public root certificate:
+
+```sh
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml exec -T caddy \
+  cat /data/caddy/pki/authorities/local/root.crt \
+  > /opt/ovload-gateway/ovload-root.crt
+docker compose --env-file /opt/ovload-gateway/deploy.env \
+  -f deploy/compose.yml ps
+curl --fail --cacert /opt/ovload-gateway/ovload-root.crt \
+  https://47.96.235.250:51771/healthz
+```
+
+Verify the root certificate through the deployment host, then trust it on the
+client before browser acceptance. Distribute only `root.crt`, never the CA private
+key. A deployment using a domain and a publicly trusted certificate should adjust
+the Caddy TLS configuration and the application's public origin together.
+
+Verify that the frontend loads, the owner can sign in, and authenticated
+management requests succeed. Check service health and affected workflows after
+each update; successful compilation alone does not verify deployment or provider
+connectivity.
+
+## State And Updates
+
+PostgreSQL, Redis, gateway runtime data, and Caddy data/configuration use separate
+persistent volumes. The application, Redis, and Caddy run without root, and the
+application and ingress use read-only root filesystems. Keep the private host
+configuration and credential key when replacing the gateway image.
+
+Build a new image, retain the previous image tag or digest, and replace the
+gateway with `docker compose ... up -d --no-deps --wait gateway`. Caddy continues
+to target the same service name. Restarting the single gateway can interrupt
+active requests. Review schema changes and take database and credential-key
+backups before an update; replacing the application image does not roll back
+database migrations. See [Database](DATABASE.md).
+
+Do not use `docker compose down -v` for an update, flush Redis, or prune unrelated
+services and volumes. The gateway never receives the Docker socket. Image-based
+updates use the host's Compose workflow; the container disables application
+self-restart.
+
+This source-build deployment does not establish signed release publication or
+acceptance of the separate online update and rollback flow. See
+[Releasing](RELEASING.md) for those requirements.

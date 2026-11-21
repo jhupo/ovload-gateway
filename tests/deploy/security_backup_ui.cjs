@@ -1,0 +1,50 @@
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const { createRequire } = require('node:module')
+const { chromium, expect } = createRequire('/src/web/package.json')('@playwright/test')
+const base = 'https://192.168.2.150:19444'
+const out = '/src/test-results/security-backup'
+const credentials = JSON.parse(fs.readFileSync('/test-runtime/private.json', 'utf8'))
+let browser, context, csrf
+
+async function main() {
+  browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] })
+  context = await browser.newContext({ baseURL: base, ignoreHTTPSErrors: true, locale: 'zh-CN', viewport: { width: 1440, height: 1000 } })
+  await context.addInitScript(() => localStorage.setItem('i18nextLng', 'zh'))
+  const login = await context.request.post('/api/v1/auth/sessions', { headers: { Origin: base }, data: { login: 'ovload_security_verify', password: credentials.administratorPassword } })
+  assert.equal(login.status(), 200)
+  csrf = (await login.json()).csrf_token
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto('/data-backup')
+  await page.getByRole('tab', { name: '定时备份', exact: true }).click()
+  await page.getByRole('button', { name: '创建备份', exact: true }).click()
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toBeVisible()
+  await dialog.locator('#backup-create-expiry').fill('1')
+  await dialog.getByRole('button', { name: '创建', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  const row = page.getByRole('row').filter({ hasText: '手动' })
+  await expect(row).toHaveCount(1)
+  await expect(row).toContainText('已完成', { timeout: 100000 })
+  const box = await row.boundingBox()
+  assert.ok(box && box.height <= 90, 'Long filenames must not enlarge the table row')
+  await page.screenshot({ path: out + '/backup-records-final.png', fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+  await page.screenshot({ path: out + '/backup-mobile.png', fullPage: true })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await row.getByRole('button', { name: '删除', exact: true }).click()
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: '删除', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(row).toHaveCount(0, { timeout: 100000 })
+  assert.deepEqual(errors, [])
+  fs.writeFileSync(out + '/ui-result.json', JSON.stringify({ create: true, completed: true, deleted: true, mobileOverflow: false, rowHeight: box.height, errors }, null, 2))
+  console.log('PASS Backup UI creates and deletes a real archive; desktop rows and mobile layout fit')
+}
+main().catch(error => { console.error(error); process.exitCode = 1 }).finally(async () => {
+  if (context && csrf) await context.request.delete('/api/admin/v1/auth/session', { headers: { Origin: base, 'X-CSRF-Token': csrf } }).catch(() => {})
+  if (browser) await browser.close()
+})
