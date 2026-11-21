@@ -37,7 +37,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       }
       if (!csrf) throw expired()
       const status = await fetch('/api/admin/v1/auth/step-up/status', {
-        credentials: 'same-origin',
+        credentials: 'include',
         cache: 'no-store',
         signal: AbortSignal.timeout(15_000),
       })
@@ -76,7 +76,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     try {
       const response = await fetch('/api/admin/v1/auth/step-up', {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials: 'include',
         signal: AbortSignal.timeout(15_000),
         headers: {
           'Content-Type': 'application/json',

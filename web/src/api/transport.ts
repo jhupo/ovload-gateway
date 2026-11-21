@@ -82,7 +82,7 @@ export async function transportRequest({
     const response = await fetch(endpoint(audience, path), {
       method,
       headers,
-      credentials: 'same-origin',
+      credentials: 'include',
       cache: 'no-store',
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])

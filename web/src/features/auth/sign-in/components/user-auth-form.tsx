@@ -90,12 +90,15 @@ export function UserAuthForm() {
       })
     } catch (error) {
       if (useIdentitySession.getState().session?.id !== owner) return
+      if (authenticated) useIdentitySession.getState().clear()
       const message =
         !authenticated && error instanceof ApiError && error.status === 401
           ? t('auth.invalid_credentials')
-          : error instanceof Error
-            ? error.message
-            : t('auth.error')
+          : authenticated
+            ? t('auth.session_init_failed')
+            : error instanceof Error
+              ? error.message
+              : t('auth.error')
       toast.error(message, { id: 'sign-in-error' })
     }
   }

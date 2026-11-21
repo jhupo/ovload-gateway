@@ -1018,6 +1018,7 @@
     "sign_in_title": "登录",
     "sign_in_desc": "输入邮箱或用户名及密码登录账户",
     "invalid_credentials": "用户名或密码错误。",
+    "session_init_failed": "密码验证成功，但登录会话未建立，请刷新页面后重试。",
     "sign_up_title": "创建账户",
     "sign_up_desc": "输入您的邮箱和密码创建账户",
     "forgot_password_title": "忘记密码",
