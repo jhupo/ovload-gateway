@@ -516,6 +516,23 @@ async fn initialize_inner(
     auth.ensure_default_admin(config.default_password.expose())
         .await?;
 
+    // The browser management API authenticates against the authoritative
+    // identity store. Bootstrap the configured operator there as well so a
+    // fresh database has one usable management credential on first start.
+    // Existing principals are intentionally left untouched.
+    let identity = Arc::new(
+        IdentityService::new(store.identity())
+            .await
+            .map_err(|_| AdminError::internal("identity service initialization failed"))?,
+    );
+    match identity
+        .bootstrap_owner(&config.default_username, config.default_password.expose())
+        .await
+    {
+        Ok(_) | Err(crate::model::identity_access::IdentityError::Conflict) => {}
+        Err(_) => return Err(AdminError::internal("identity owner bootstrap failed")),
+    }
+
     let accounts = initialize_accounts(
         store.accounts(),
         store.account_runtime(),
@@ -606,11 +623,7 @@ async fn initialize_inner(
         billing_operations: Arc::new(BillingOperationsService::new(store.billing_operations())),
         retail_pricing: Arc::new(RetailPricingService::new(store.retail_pricing())),
         model_keys: Arc::new(ModelKeyService::new(store.model_keys(), snapshot.clone())),
-        identity: Arc::new(
-            IdentityService::new(store.identity())
-                .await
-                .map_err(|_| AdminError::internal("identity service initialization failed"))?,
-        ),
+        identity,
         timezone,
         public_services: Arc::new(public_services),
         plugin_management: Arc::new(PluginManagementService::new(
