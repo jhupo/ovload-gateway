@@ -42,6 +42,7 @@ type FacetedFilters<T> = ComponentProps<typeof DataTableToolbar<T>>['filters']
 export type DataTableFrameProps<T extends { id: string }> = {
   data?: T[]
   columns?: ColumnDef<T>[]
+  table?: TanStackTable<T>
   label?: string
   searchPlaceholder?: string
   searchText?: (record: T) => string
@@ -75,6 +76,7 @@ export type DataTableFrameProps<T extends { id: string }> = {
 export function DataTableFrame<T extends { id: string }>({
   data = [],
   columns = [],
+  table: providedTable,
   label = 'Data table',
   searchPlaceholder,
   searchText = () => '',
@@ -108,9 +110,9 @@ export function DataTableFrame<T extends { id: string }>({
   const columnFilters = filterState?.columns ?? localColumnFilters
   const globalFilter = filterState?.search ?? localGlobalFilter
   // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
-    data,
-    columns,
+  const internalTable = useReactTable({
+    data: providedTable ? [] : data,
+    columns: providedTable ? [] : columns,
     getRowId: (record) => record.id,
     manualPagination: !!server || pagination !== undefined,
     manualSorting: !!server,
@@ -147,6 +149,7 @@ export function DataTableFrame<T extends { id: string }>({
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
+  const table = providedTable ?? internalTable
 
   const collectionScroll = useRef<HTMLDivElement>(null)
   const scrollRef = viewportRef ?? collectionScroll
@@ -318,7 +321,7 @@ export function DataTableFrame<T extends { id: string }>({
       <div
         ref={scrollRef}
         className={cn(
-          'min-h-0 min-w-0 flex-1 overflow-auto rounded-lg border [&>[data-slot=table-container]]:overflow-visible',
+          'min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain rounded-lg border [scrollbar-gutter:stable_both-edges] [&_[data-slot=table-container]]:overflow-visible',
           viewportClassName
         )}
         aria-busy={loading}

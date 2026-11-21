@@ -1020,6 +1020,7 @@
     "sign_in_desc": "Enter your email or username and password to sign in",
     "invalid_credentials": "Incorrect username or password.",
     "session_init_failed": "The password was accepted, but the login session could not be established. Refresh the page and try again.",
+    "request_id": "Request ID",
     "sign_up_title": "Create an account",
     "sign_up_desc": "Enter your email and password to create an account.",
     "forgot_password_title": "Forgot Password",

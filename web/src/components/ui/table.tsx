@@ -9,7 +9,10 @@ function Table({
   return (
     <div
       data-slot='table-container'
-      className={cn('relative w-full overflow-x-auto', containerClassName)}
+      className={cn(
+        'relative min-w-0 w-full overscroll-contain overflow-x-auto [scrollbar-gutter:stable]',
+        containerClassName
+      )}
     >
       <table
         data-slot='table'

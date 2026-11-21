@@ -99,7 +99,11 @@ export function UserAuthForm() {
             : error instanceof Error
               ? error.message
               : t('auth.error')
-      toast.error(message, { id: 'sign-in-error' })
+      const diagnostic =
+        error instanceof ApiError && error.requestId
+          ? `${message} (${t('auth.request_id')}: ${error.requestId})`
+          : message
+      toast.error(diagnostic, { id: 'sign-in-error' })
     }
   }
   return (

@@ -6,7 +6,7 @@ export function TableViewport({ className, ...props }: ComponentProps<'div'>) {
     <div
       {...props}
       className={cn(
-        'min-h-0 min-w-0 flex-1 overflow-auto rounded-lg border [&>[data-slot=table-container]]:overflow-visible',
+        'min-h-0 min-w-0 flex-1 overscroll-contain overflow-auto rounded-lg border [scrollbar-gutter:stable_both-edges] [&_[data-slot=table-container]]:overflow-visible',
         className
       )}
     />

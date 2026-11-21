@@ -681,6 +681,7 @@ function AccountsContent() {
               ]}
             />
             <DataTableFrame
+              table={table}
               data={directory.data?.items ?? []}
               columns={columns}
               label={tr('title')}
@@ -703,7 +704,6 @@ function AccountsContent() {
                 <Table
                   aria-label={tr('title')}
                   className='hidden min-w-[1280px] xl:table'
-                  containerClassName='overflow-x-scroll'
                 >
                   <TableHeader>
                     {table.getHeaderGroups().map((group) => (

@@ -77,12 +77,21 @@ export async function apiRequest<T>(
       response.status,
       code,
       localizeAdminError(code, response.status, message, errorKey, error?.params),
-      stringValue(error?.request_id) ?? stringValue(error?.requestId),
+      stringValue(error?.request_id) ??
+        stringValue(error?.requestId) ??
+        response.headers.get('X-Request-Id') ??
+        undefined,
       initiatingSessionId
     )
   }
   if (response.status !== 204 && payload === undefined) {
-    throw new ApiError(503, 'identity.unavailable', 'Invalid API response')
+    throw new ApiError(
+      503,
+      'identity.unavailable',
+      'Invalid API response',
+      response.headers.get('X-Request-Id') ?? undefined,
+      initiatingSessionId
+    )
   }
   return { data: payload as T, etag: response.headers.get('ETag') }
 }
