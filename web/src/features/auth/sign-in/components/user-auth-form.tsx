@@ -92,7 +92,10 @@ export function UserAuthForm() {
       if (useIdentitySession.getState().session?.id !== owner) return
       if (authenticated) useIdentitySession.getState().clear()
       const message =
-        !authenticated && error instanceof ApiError && error.status === 401
+        !authenticated &&
+        error instanceof ApiError &&
+        error.status === 401 &&
+        error.code === 'identity.unauthorized'
           ? t('auth.invalid_credentials')
           : authenticated
             ? t('auth.session_init_failed')
@@ -101,8 +104,10 @@ export function UserAuthForm() {
               : t('auth.error')
       const diagnostic =
         error instanceof ApiError && error.requestId
-          ? `${message} (${t('auth.request_id')}: ${error.requestId})`
-          : message
+          ? `${message} (${error.status}, ${t('auth.request_id')}: ${error.requestId})`
+          : error instanceof ApiError
+            ? `${message} (${error.status})`
+            : message
       toast.error(diagnostic, { id: 'sign-in-error' })
     }
   }
