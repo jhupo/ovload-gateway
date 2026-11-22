@@ -50,7 +50,7 @@ export async function transportRequest({
     await ensureStepUp()
   const current = sessionPort().getSession()
   const csrf = isPublic || method === 'GET' ? undefined : current?.csrf_token
-  if (method !== 'GET' && !csrf) {
+  if (!isPublic && method !== 'GET' && !csrf) {
     if (!isPublic && current?.id) sessionPort().invalidateSession(current.id)
     throw new ApiError(401, 'identity.unauthorized', 'Session expired', undefined, current?.id)
   }
@@ -79,11 +79,6 @@ export async function transportRequest({
         : body instanceof Blob
           ? body
           : JSON.stringify(body)
-    console.warn('[ovload-transport] before-fetch', {
-      url: endpoint(audience, path),
-      method,
-      hasBody: body !== undefined,
-    })
     const response = await fetch(endpoint(audience, path), {
       method,
       headers,
