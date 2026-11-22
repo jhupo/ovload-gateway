@@ -44,14 +44,14 @@ export function UserAuthForm() {
     ].filter(Boolean)
     if (errors.length > 0) {
       toast.error(errors.join(' '), { id: 'sign-in-error' })
-      console.debug('[ovload-auth] validation-rejected', {
+      console.warn('[ovload-auth] validation-rejected', {
         loginLength: login.length,
         passwordLength: password.length,
         errorCount: errors.length,
       })
       return
     }
-    console.debug('[ovload-auth] dispatching-login', {
+    console.warn('[ovload-auth] dispatching-login', {
       loginLength: login.length,
       passwordLength: password.length,
     })
@@ -63,7 +63,7 @@ export function UserAuthForm() {
     let owner = useIdentitySession.getState().session?.id
     let authenticated = false
     try {
-      console.debug('[ovload-auth] api-request-start')
+      console.warn('[ovload-auth] api-request-start')
       const { data: session } = await apiRequest<IdentitySession>(
         'customer',
         '/auth/sessions',
