@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useState } from 'react'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { KeyRound, LogIn, UserRound } from 'lucide-react'
@@ -26,35 +26,40 @@ export function UserAuthForm() {
   const queryClient = useQueryClient()
   const policy = useAuthPolicy()
   const [consent, setConsent] = useState<number | null>(null)
-  const formRef = useRef<HTMLFormElement>(null)
   const {
     register,
+    handleSubmit,
     resetField,
-    formState: { isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<Credentials>({
     defaultValues: { login: '', password: '' },
   })
-  function submitForm() {
-    const form = formRef.current
-    if (!form) return
-    const values = new FormData(form)
-    const login = String(values.get('login') ?? '').trim()
-    const password = String(values.get('password') ?? '')
-    const errors = [
-      !login ? t('identity.usernameRequired') : '',
-      !password ? t('validation.password_required') : '',
-      password.length > 256 ? t('validation.password_too_long') : '',
-    ].filter(Boolean)
-    if (errors.length > 0) {
-      toast.error(errors.join(' '), { id: 'sign-in-error' })
-      return
-    }
-    void onSubmit({ login, password })
+  function onInvalid(formErrors: FieldErrors<Credentials>) {
+    console.info('[auth-debug] validation:error', {
+      fields: Object.keys(formErrors),
+    })
+    toast.error(
+      Object.values(formErrors)
+        .map((error) => error?.message)
+        .filter(Boolean)
+        .join(' '),
+      { id: 'sign-in-error' }
+    )
   }
   async function onSubmit(data: Credentials) {
+    const login = data.login.trim()
+    console.info('[auth-debug] submit:handler', {
+      login,
+      passwordLength: data.password.length,
+    })
     let owner = useIdentitySession.getState().session?.id
     let authenticated = false
     try {
+      console.info('[auth-debug] request:start', {
+        method: 'POST',
+        audience: 'customer',
+        path: '/auth/sessions',
+      })
       const { data: session } = await apiRequest<IdentitySession>(
         'customer',
         '/auth/sessions',
@@ -62,7 +67,7 @@ export function UserAuthForm() {
           method: 'POST',
           public: true,
           body: {
-            login: data.login.trim(),
+            login,
             password: data.password,
             consent_revision: policy.data?.supports_consent
               ? consent
@@ -70,6 +75,10 @@ export function UserAuthForm() {
           },
         }
       )
+      console.info('[auth-debug] request:success', {
+        audience: session.audience,
+        hasSessionId: Boolean(session.id),
+      })
       authenticated = true
       if (useIdentitySession.getState().session?.id !== owner) return
       queryClient.clear()
@@ -90,6 +99,13 @@ export function UserAuthForm() {
         replace: true,
       })
     } catch (error) {
+      console.info('[auth-debug] request:error', {
+        errorType: error instanceof ApiError ? 'ApiError' : typeof error,
+        status: error instanceof ApiError ? error.status : undefined,
+        code: error instanceof ApiError ? error.code : undefined,
+        requestId: error instanceof ApiError ? error.requestId : undefined,
+        message: error instanceof Error ? error.message : undefined,
+      })
       if (useIdentitySession.getState().session?.id !== owner) return
       if (authenticated) useIdentitySession.getState().clear()
       const message =
@@ -114,11 +130,10 @@ export function UserAuthForm() {
   }
   return (
     <form
-      ref={formRef}
       noValidate
       onSubmit={(event) => {
-        event.preventDefault()
-        submitForm()
+        console.info('[auth-debug] form:submit')
+        void handleSubmit(onSubmit, onInvalid)(event)
       }}
       className='grid gap-6'
     >
@@ -127,14 +142,25 @@ export function UserAuthForm() {
         icon={UserRound}
         type='text'
         autoComplete='username'
-        {...register('login')}
+        aria-invalid={!!errors.login}
+        {...register('login', {
+          validate: (value) =>
+            value.trim() ? true : t('identity.usernameRequired'),
+        })}
       />
       <FloatingLabelField
         label={t('auth.password')}
         icon={KeyRound}
         type='password'
         autoComplete='current-password'
-        {...register('password')}
+        aria-invalid={!!errors.password}
+        {...register('password', {
+          validate: (value) => {
+            if (!value) return t('validation.password_required')
+            if (value.length > 256) return t('validation.password_too_long')
+            return true
+          },
+        })}
       />
       <Link
         to='/forgot-password'
@@ -146,10 +172,11 @@ export function UserAuthForm() {
       <OAuthButtons consent={consent} />
       <HumanVerification />
       <Button
-        type='button'
+        type='submit'
         className='auth-submit mt-2 h-11 w-full'
         disabled={isSubmitting}
-        onClick={submitForm}
+        data-invalid={Object.keys(errors).length > 0}
+        onClick={() => console.info('[auth-debug] button:click')}
       >
         <LogIn className='size-4' aria-hidden='true' />
         {t('auth.sign_in_btn')}
