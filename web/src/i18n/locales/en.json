@@ -1382,6 +1382,7 @@
     "email_required": "Please enter your email.",
     "email_invalid": "Please enter a valid email address.",
     "password_required": "Please enter your password.",
+    "password_too_long": "Password cannot exceed 256 characters.",
     "password_min_length": "Password must be at least 7 characters long.",
     "confirm_password_required": "Please confirm your password.",
     "passwords_not_match": "Passwords don't match.",

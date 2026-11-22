@@ -1381,6 +1381,7 @@
     "email_required": "请输入您的邮箱。",
     "email_invalid": "请输入有效的邮箱地址。",
     "password_required": "请输入您的密码。",
+    "password_too_long": "密码长度不能超过 256 个字符。",
     "password_min_length": "密码长度至少为 7 个字符。",
     "confirm_password_required": "请确认您的密码。",
     "passwords_not_match": "两次输入的密码不一致。",

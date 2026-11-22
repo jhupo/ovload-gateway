@@ -1,7 +1,5 @@
-import { useState } from 'react'
-import { z } from 'zod'
-import { useForm, type FieldErrors } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { KeyRound, LogIn, UserRound } from 'lucide-react'
@@ -28,27 +26,30 @@ export function UserAuthForm() {
   const queryClient = useQueryClient()
   const policy = useAuthPolicy()
   const [consent, setConsent] = useState<number | null>(null)
-  const schema = z.object({
-    login: z.string().trim().min(1, t('identity.usernameRequired')),
-    password: z.string().min(1, t('validation.password_required')).max(256),
-  })
+  const formRef = useRef<HTMLFormElement>(null)
   const {
     register,
-    handleSubmit,
     resetField,
-    formState: { errors, isSubmitting },
+    formState: { isSubmitting },
   } = useForm<Credentials>({
-    resolver: zodResolver(schema),
     defaultValues: { login: '', password: '' },
   })
-  function onInvalid(errors: FieldErrors<Credentials>) {
-    toast.error(
-      Object.values(errors)
-        .map((error) => error?.message)
-        .filter(Boolean)
-        .join(' '),
-      { id: 'sign-in-error' }
-    )
+  function submitForm() {
+    const form = formRef.current
+    if (!form) return
+    const values = new FormData(form)
+    const login = String(values.get('login') ?? '').trim()
+    const password = String(values.get('password') ?? '')
+    const errors = [
+      !login ? t('identity.usernameRequired') : '',
+      !password ? t('validation.password_required') : '',
+      password.length > 256 ? t('validation.password_too_long') : '',
+    ].filter(Boolean)
+    if (errors.length > 0) {
+      toast.error(errors.join(' '), { id: 'sign-in-error' })
+      return
+    }
+    void onSubmit({ login, password })
   }
   async function onSubmit(data: Credentials) {
     let owner = useIdentitySession.getState().session?.id
@@ -113,8 +114,12 @@ export function UserAuthForm() {
   }
   return (
     <form
+      ref={formRef}
       noValidate
-      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onSubmit={(event) => {
+        event.preventDefault()
+        submitForm()
+      }}
       className='grid gap-6'
     >
       <FloatingLabelField
@@ -122,7 +127,6 @@ export function UserAuthForm() {
         icon={UserRound}
         type='text'
         autoComplete='username'
-        aria-invalid={!!errors.login}
         {...register('login')}
       />
       <FloatingLabelField
@@ -130,7 +134,6 @@ export function UserAuthForm() {
         icon={KeyRound}
         type='password'
         autoComplete='current-password'
-        aria-invalid={!!errors.password}
         {...register('password')}
       />
       <Link
@@ -146,8 +149,7 @@ export function UserAuthForm() {
         type='button'
         className='auth-submit mt-2 h-11 w-full'
         disabled={isSubmitting}
-        onClick={() => void handleSubmit(onSubmit, onInvalid)()}
-        data-invalid={Object.keys(errors).length > 0}
+        onClick={submitForm}
       >
         <LogIn className='size-4' aria-hidden='true' />
         {t('auth.sign_in_btn')}
