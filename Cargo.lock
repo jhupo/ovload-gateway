@@ -514,9 +514,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.9.0"
+version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55752025c39c0e094962fd73f1c57014b191f678612e517f219468e575af9822"
+checksum = "aff4bf014c512840b2bba80a20417b723cbd6a0a65c02e2d81f50b4268aedfc7"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -526,7 +526,6 @@ dependencies = [
  "http-body",
  "http-body-util",
  "itoa",
- "num-integer",
  "pin-project-lite",
  "ryu",
  "serde",
