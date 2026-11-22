@@ -99,6 +99,10 @@ export function UserAuthForm() {
         replace: true,
       })
     } catch (error) {
+      console.warn('[ovload-auth] login-error', {
+        name: error instanceof Error ? error.name : typeof error,
+        message: error instanceof Error ? error.message : String(error),
+      })
       if (useIdentitySession.getState().session?.id !== owner) return
       if (authenticated) useIdentitySession.getState().clear()
       const message =
