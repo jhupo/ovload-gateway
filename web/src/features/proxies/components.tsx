@@ -79,7 +79,7 @@ export function ProxyDialog({
   children,
 }: {
   title: string
-  description: string
+  description?: string
   wide?: boolean
   compact?: boolean
   fixedHeight?: boolean
@@ -114,7 +114,7 @@ export function ProxyDialog({
       >
         <DialogHeader className='shrink-0 pe-8 text-start'>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {children}
       </DialogContent>

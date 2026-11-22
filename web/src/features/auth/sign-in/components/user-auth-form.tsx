@@ -81,14 +81,14 @@ export function UserAuthForm() {
       }
       await useIdentitySession.getState().refreshProfile()
       if (useIdentitySession.getState().session?.id !== session.id) return
-      resetField('password')
-      await navigate({
+            await navigate({
         to:
           session.audience === 'customer'
             ? '/user/dashboard'
             : managementHomePath(),
         replace: true,
       })
+      resetField('password')
     } catch (error) {
       if (useIdentitySession.getState().session?.id !== owner) return
       if (authenticated) useIdentitySession.getState().clear()

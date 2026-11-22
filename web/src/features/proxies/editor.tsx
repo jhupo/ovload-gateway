@@ -178,8 +178,7 @@ export function ProxyEditor({
     <>
       <ProxyDialog
         title={t(item ? 'proxies.edit' : 'proxies.add')}
-        description={t('proxyDesign.editorDescription')}
-        busy={busy}
+                busy={busy}
         compact={tab === 'single'}
         fixedHeight={tab === 'batch'}
         onClose={close}
@@ -245,7 +244,7 @@ export function ProxyEditor({
                     </Label>
                     <p
                       id='proxy-url-help'
-                      className='text-xs leading-relaxed text-muted-foreground'
+                      className='hidden'
                     >
                       {t(
                         record?.hasAuthentication
@@ -283,9 +282,6 @@ export function ProxyEditor({
                       </Button>
                     </div>
                   </div>
-                  <p className='border-t pt-4 text-xs leading-relaxed text-muted-foreground'>
-                    {t('proxyDesign.autoLocationHelp')}
-                  </p>
                 </>
               )}
             </fieldset>
