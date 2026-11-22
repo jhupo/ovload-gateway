@@ -52,6 +52,7 @@ export function UserAuthForm() {
     void onSubmit({ login, password })
   }
   async function onSubmit(data: Credentials) {
+    const login = data.login.trim()
     setIsSubmitting(true)
     let owner = useIdentitySession.getState().session?.id
     let authenticated = false
