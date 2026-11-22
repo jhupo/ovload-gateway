@@ -9,7 +9,7 @@ RUN --mount=type=cache,id=ovload-pnpm,target=/pnpm/store \
 COPY web/ ./
 RUN pnpm build
 
-FROM rust:1.99.1-bookworm AS backend-build
+FROM rust:1.100.0-bookworm AS backend-build
 RUN apt-get update && apt-get install --no-install-recommends -y cmake \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /source
