@@ -138,7 +138,7 @@ in-memory intents. No real reset consumption is performed during UI validation.
 
 管理界面以 OpenAI、Claude、Gemini、Grok 四个平台组织账号，各平台均支持 OAuth 和 API Key。存储仍保留适配器身份：OpenAI OAuth=`openai`、API Key=`openai_api`；Grok OAuth=`xai`、API Key=`xai_api`；Claude/Gemini 使用各自 provider 和 `authenticationKind` 区分接入方式。账号目录 `provider=openai`/`xai` 包括对应 API Key 账号，分组的平台约束也按平台匹配。
 
-Gemini OAuth 使用 Gemini CLI 的 Code Assist 授权流程，回调地址为 `https://codeassist.google.com/authcode`。服务端按授权时绑定的账号出站代理执行令牌交换、用户资料读取和项目初始化；选择直接连接时不继承系统代理。Google 长任务省略 `done` 时视为尚未完成，继续轮询。授权日志只记录阶段、固定错误分类和 HTTP 状态，不记录授权码、令牌、完整链接或上游响应正文。网络失败、授权码拒绝及项目初始化失败返回各自的安全提示。
+Gemini OAuth 使用 Antigravity CLI 的 Code Assist 授权流程，回调地址为 `https://antigravity.google/oauth-callback`。服务端按授权时绑定的账号出站代理执行令牌交换、用户资料读取和项目初始化；选择直接连接时不继承系统代理。Google 长任务省略 `done` 时视为尚未完成，继续轮询。授权日志只记录阶段、固定错误分类和 HTTP 状态，不记录授权码、令牌、完整链接或上游响应正文。网络失败、授权码拒绝及项目初始化失败返回各自的安全提示。
 
 `POST /api/admin/accounts/models/preview` 接受与账号导入相同的 `provider`、`data`、`outboundProxyId`，仅查询模型，不持久化账号、凭据、分组或配置版本。API Key 的 `data` 为 `{schema_version:1,name,api_key,base_url}`。调用所填上游的模型列表接口（Claude/Gemini 按原生协议认证和分页），返回 `{models:[{id,label}]}`。需要账号管理权限和 CSRF；保留 HTTPS、DNS/代理策略、并发及响应体限制，密钥只在请求体和上游认证头中传递。
 

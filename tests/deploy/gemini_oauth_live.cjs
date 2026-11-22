@@ -47,7 +47,7 @@ const output = '/src/test-results/gemini-oauth'
       const flow = (await start.json()).data
       const url = new URL(flow.authorizationUrl)
       assert.equal(url.origin, 'https://accounts.google.com')
-      assert.equal(url.searchParams.get('redirect_uri'), 'https://codeassist.google.com/authcode')
+      assert.equal(url.searchParams.get('redirect_uri'), 'https://antigravity.google/oauth-callback')
       assert.equal(url.searchParams.get('code_challenge_method'), 'S256')
       assert.ok(url.searchParams.get('code_challenge'))
       const at = Date.now()
