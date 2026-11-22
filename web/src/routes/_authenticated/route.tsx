@@ -1,6 +1,9 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { ApiError } from '@/api/errors'
-import { useIdentitySession } from '@/stores/identity-session'
+import {
+  hasIdentitySession,
+  useIdentitySession,
+} from '@/stores/identity-session'
 import {
   canOpenManagementPath,
   managementHomePath,
@@ -24,7 +27,9 @@ export const Route = createFileRoute('/_authenticated')({
       })
     }
     try {
-      await useIdentitySession.getState().restore(audience)
+      if (!active || active.audience !== audience || !hasIdentitySession()) {
+        await useIdentitySession.getState().restore(audience)
+      }
       if (
         audience === 'management' &&
         !canOpenManagementPath(location.pathname.replace(/\/$/, ''))

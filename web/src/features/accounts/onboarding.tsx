@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { ApiError } from '@/api/errors'
 import {
   settingsFor,
   upstreamAccounts,
@@ -190,10 +191,14 @@ export function AccountOnboarding({
       }
       setInvalid(null)
     } catch (error) {
-      if (currentOwner())
-        toast.error(error instanceof Error ? error.message : tr('failed'), {
-          id: 'account-onboarding',
-        })
+      if (currentOwner()) {
+        const message = error instanceof Error ? error.message : tr('failed')
+        const diagnostic =
+          error instanceof ApiError && error.requestId
+            ? `${message} (${t('auth.request_id')}: ${error.requestId})`
+            : message
+        toast.error(diagnostic, { id: 'account-onboarding' })
+      }
     } finally {
       setPending(false)
     }

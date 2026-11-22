@@ -183,8 +183,8 @@ describe('UserAuthForm', () => {
     )
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
       '/api/v1/auth/sessions',
-      '/api/admin/v1/session/permissions',
       '/api/admin/v1/profile',
+      '/api/admin/v1/session/permissions',
     ])
     expect(useIdentitySession.getState().session).toEqual(management)
   })

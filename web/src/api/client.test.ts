@@ -124,6 +124,38 @@ describe('API session invalidation', () => {
     })
   })
 
+  it('keeps a provider-specific bad gateway message', async () => {
+    useIdentitySession.getState().setSession({
+      ...customer,
+      audience: 'management',
+      user_id: null,
+      tenant_id: null,
+      principal_id: 'operator-a',
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          Response.json(
+            {
+              code: 50201,
+              errorKey: 'admin.bad_gateway',
+              params: {},
+              message: '无法读取 Gemini Code Assist 项目，请检查账号资格及出站网络',
+              data: null,
+            },
+            { status: 502 }
+          )
+        )
+      )
+    )
+    await expect(apiRequest('management', '/accounts/oauth/complete')).rejects.toMatchObject({
+      status: 502,
+      code: '50201',
+      message: '无法读取 Gemini Code Assist 项目，请检查账号资格及出站网络',
+    })
+  })
+
   it('keeps a newer session when an old request receives 401', async () => {
     let finish!: (response: Response) => void
     vi.stubGlobal(

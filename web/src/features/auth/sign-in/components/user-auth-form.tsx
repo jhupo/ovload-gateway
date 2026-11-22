@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { KeyRound, LogIn, UserRound } from 'lucide-react'
+import { KeyRound, Loader2, LogIn, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { apiRequest } from '@/api/client'
@@ -27,10 +27,7 @@ export function UserAuthForm() {
   const policy = useAuthPolicy()
   const [consent, setConsent] = useState<number | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const {
-    register,
-    resetField,
-  } = useForm<Credentials>({
+  const { register } = useForm<Credentials>({
     defaultValues: { login: '', password: '' },
   })
   function submitForm(form: HTMLFormElement) {
@@ -74,13 +71,13 @@ export function UserAuthForm() {
       queryClient.clear()
       useIdentitySession.getState().setSession(session)
       owner = session.id
-      if (session.audience === 'management') {
-        await useIdentitySession.getState().refreshPermissions()
-        if (useIdentitySession.getState().session?.id !== session.id) return
-      }
-      await useIdentitySession.getState().refreshProfile()
+      await Promise.all([
+        useIdentitySession.getState().refreshProfile(),
+        session.audience === 'management'
+          ? useIdentitySession.getState().refreshPermissions()
+          : Promise.resolve(),
+      ])
       if (useIdentitySession.getState().session?.id !== session.id) return
-      resetField('password')
       await navigate({
         to:
           session.audience === 'customer'
@@ -150,7 +147,11 @@ export function UserAuthForm() {
         className='auth-submit mt-2 h-11 w-full'
         disabled={isSubmitting}
       >
-        <LogIn className='size-4' aria-hidden='true' />
+        {isSubmitting ? (
+          <Loader2 className='size-4 animate-spin' aria-hidden='true' />
+        ) : (
+          <LogIn className='size-4' aria-hidden='true' />
+        )}
         {t('auth.sign_in_btn')}
       </Button>
     </form>
