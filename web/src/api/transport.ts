@@ -85,7 +85,7 @@ export async function transportRequest({
         method,
         url: endpoint(audience, path),
         hasBody: requestBody !== undefined,
-        hasCredentials: true,
+        credentialMode: 'include',
       })
     )
     const response = await fetch(endpoint(audience, path), {
