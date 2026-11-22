@@ -167,8 +167,10 @@ pub struct AdminErrorBody {
     code: AdminErrorCode,
     error_key: String,
     params: serde_json::Value,
-    #[serde(default, skip_serializing)]
+    #[serde(skip)]
     message: String,
+    #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
+    public_message: Option<String>,
     data: (),
 }
 
@@ -192,6 +194,7 @@ impl AdminErrorBody {
             error_key: error_key.into(),
             params,
             message: message.into(),
+            public_message: None,
             data: (),
         }
     }
@@ -478,7 +481,7 @@ pub(crate) fn map_admin_service_error(error: ovload_admin::model::AdminError) ->
             | AdminErrorKind::Unavailable
     ) && !error.message().trim().is_empty()
     {
-        response.body.message = error.message().to_owned();
+        response.body.public_message = Some(error.message().to_owned());
     }
     response.diagnostic = Some(error);
     response

@@ -40,7 +40,7 @@ export function localizeAdminError(
   }
   // Provider OAuth failures carry a reviewed, stage-specific public message.
   // Keep it instead of replacing it with the generic 502 translation.
-  if (code === '50201' && fallback.trim()) return fallback
+  if (code === '50201' && fallback.trim() && fallback !== i18n.t('auth.error')) return fallback
   const adminKeys: Record<string, string> = {
     '40000': 'malformedJson',
     '40001': 'badRequest',

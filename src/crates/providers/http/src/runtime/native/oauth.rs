@@ -24,6 +24,7 @@ const GEMINI_CLIENT_SECRET_ENV: &str = "CPR_ANTIGRAVITY_CLIENT_SECRET";
 const CLAUDE_REDIRECT: &str = "http://localhost:54545/callback";
 const GEMINI_REDIRECT: &str = "https://antigravity.google/oauth-callback";
 const GEMINI_SCOPES: &str = "openid https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs";
+const GEMINI_OAUTH_CONFIG_MESSAGE: &str = "Gemini OAuth 服务端未配置 Antigravity 客户端凭据，请检查 CPR_ANTIGRAVITY_CLIENT_ID 与 CPR_ANTIGRAVITY_CLIENT_SECRET";
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -96,6 +97,16 @@ fn configured_gemini_secret() -> Result<String, ProviderAdminError> {
     Ok(value)
 }
 
+fn ensure_gemini_oauth_config() -> Result<(), ProviderAdminError> {
+    if configured_gemini_client_id().trim().is_empty() {
+        return Err(
+            ProviderAdminError::new(ProviderAdminErrorKind::Unavailable)
+                .with_public_message(GEMINI_OAUTH_CONFIG_MESSAGE),
+        );
+    }
+    configured_gemini_secret().map(|_| ())
+}
+
 fn client_id(kind: &str) -> &'static str {
     if kind == "claude" {
         CLAUDE_CLIENT
@@ -166,6 +177,9 @@ impl PublicApiProvider {
     ) -> Result<AuthorizationStarted, ProviderAdminError> {
         if !super::is_native(self.kind.as_str()) || pending.provider_kind() != &self.kind {
             return Err(invalid());
+        }
+        if self.kind.as_str() == "gemini" {
+            ensure_gemini_oauth_config()?;
         }
         if let AuthorizationMutationTarget::Reauthorize { account_id } = pending.target() {
             let account = self.account(account_id).await.map_err(|_| invalid())?;
@@ -297,6 +311,7 @@ impl PublicApiProvider {
         let client = client(pending.outbound_proxy())?;
         let mut body = json!({"grant_type":"authorization_code","client_id":client_id(self.kind.as_str()),"code":code,"redirect_uri":redirect(self.kind.as_str()),"code_verifier":verifier});
         if self.kind.as_str() == "gemini" {
+            ensure_gemini_oauth_config()?;
             body["client_secret"] = json!(configured_gemini_secret()?);
         } else {
             body["state"] = json!(state);
@@ -431,6 +446,7 @@ impl PublicApiProvider {
         let current = credential.oauth.ok_or_else(invalid)?;
         let mut body = json!({"grant_type":"refresh_token","client_id":client_id(self.kind.as_str()),"refresh_token":current.refresh_token});
         if self.kind.as_str() == "gemini" {
+            ensure_gemini_oauth_config()?;
             body["client_secret"] = json!(configured_gemini_secret()?);
         }
         let response = token_request(
@@ -697,14 +713,25 @@ async fn project(client: &reqwest::Client, access: &str) -> Result<String, Provi
         .or_else(|_| std::env::var("GOOGLE_CLOUD_PROJECT_ID"))
         .ok()
         .filter(|value| !value.trim().is_empty());
-    project_at(
-        client,
-        access,
-        project_hint.as_deref(),
+    let mut last_error = None;
+    for endpoint in [
         "https://cloudcode-pa.googleapis.com/v1internal",
-        "https://cloudresourcemanager.googleapis.com/v1/projects",
-    )
-    .await
+        "https://daily-cloudcode-pa.googleapis.com/v1internal",
+    ] {
+        match project_at(
+            client,
+            access,
+            project_hint.as_deref(),
+            endpoint,
+            "https://cloudresourcemanager.googleapis.com/v1/projects",
+        )
+        .await
+        {
+            Ok(project) => return Ok(project),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(last_error.unwrap_or_else(upstream))
 }
 
 async fn project_at(

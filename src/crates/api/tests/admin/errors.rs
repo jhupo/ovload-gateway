@@ -421,7 +421,11 @@ mod provider {
                         (
                             StatusCode::from_u16(status).unwrap(),
                             "application/json".to_owned(),
-                            json!({"code": code, "errorKey": error_key, "params": {}, "data": null}),
+                            if matches!(kind, Kind::BadGateway | Kind::Unavailable | Kind::Ambiguous) {
+                                json!({"code": code, "errorKey": error_key, "params": {}, "message": "provider operation failed", "data": null})
+                            } else {
+                                json!({"code": code, "errorKey": error_key, "params": {}, "data": null})
+                            },
                         )
                     );
                     assert!(!actual.2.to_string().contains("raw-upstream-secret-marker"));
