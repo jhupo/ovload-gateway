@@ -35,9 +35,10 @@ export function UserAuthForm() {
     defaultValues: { login: '', password: '' },
   })
   function onInvalid(formErrors: FieldErrors<Credentials>) {
-    console.info('[auth-debug] validation:error', {
-      fields: Object.keys(formErrors),
-    })
+    console.info(
+      '[auth-debug] validation:error',
+      JSON.stringify({ fields: Object.keys(formErrors) })
+    )
     toast.error(
       Object.values(formErrors)
         .map((error) => error?.message)
@@ -48,18 +49,21 @@ export function UserAuthForm() {
   }
   async function onSubmit(data: Credentials) {
     const login = data.login.trim()
-    console.info('[auth-debug] submit:handler', {
-      login,
-      passwordLength: data.password.length,
-    })
+    console.info(
+      '[auth-debug] submit:handler',
+      JSON.stringify({ login, passwordLength: data.password.length })
+    )
     let owner = useIdentitySession.getState().session?.id
     let authenticated = false
     try {
-      console.info('[auth-debug] request:start', {
-        method: 'POST',
-        audience: 'customer',
-        path: '/auth/sessions',
-      })
+      console.info(
+        '[auth-debug] request:start',
+        JSON.stringify({
+          method: 'POST',
+          audience: 'customer',
+          path: '/auth/sessions',
+        })
+      )
       const { data: session } = await apiRequest<IdentitySession>(
         'customer',
         '/auth/sessions',
@@ -75,10 +79,13 @@ export function UserAuthForm() {
           },
         }
       )
-      console.info('[auth-debug] request:success', {
-        audience: session.audience,
-        hasSessionId: Boolean(session.id),
-      })
+      console.info(
+        '[auth-debug] request:success',
+        JSON.stringify({
+          audience: session.audience,
+          hasSessionId: Boolean(session.id),
+        })
+      )
       authenticated = true
       if (useIdentitySession.getState().session?.id !== owner) return
       queryClient.clear()
@@ -99,13 +106,16 @@ export function UserAuthForm() {
         replace: true,
       })
     } catch (error) {
-      console.info('[auth-debug] request:error', {
-        errorType: error instanceof ApiError ? 'ApiError' : typeof error,
-        status: error instanceof ApiError ? error.status : undefined,
-        code: error instanceof ApiError ? error.code : undefined,
-        requestId: error instanceof ApiError ? error.requestId : undefined,
-        message: error instanceof Error ? error.message : undefined,
-      })
+      console.info(
+        '[auth-debug] request:error',
+        JSON.stringify({
+          errorType: error instanceof ApiError ? 'ApiError' : typeof error,
+          status: error instanceof ApiError ? error.status : undefined,
+          code: error instanceof ApiError ? error.code : undefined,
+          requestId: error instanceof ApiError ? error.requestId : undefined,
+          message: error instanceof Error ? error.message : undefined,
+        })
+      )
       if (useIdentitySession.getState().session?.id !== owner) return
       if (authenticated) useIdentitySession.getState().clear()
       const message =
