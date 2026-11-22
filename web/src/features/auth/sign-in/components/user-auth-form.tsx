@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useForm, type FieldErrors } from 'react-hook-form'
+import { useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { KeyRound, LogIn, UserRound } from 'lucide-react'
@@ -26,25 +26,33 @@ export function UserAuthForm() {
   const queryClient = useQueryClient()
   const policy = useAuthPolicy()
   const [consent, setConsent] = useState<number | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const {
     register,
-    handleSubmit,
     resetField,
-    formState: { errors, isSubmitting },
   } = useForm<Credentials>({
     defaultValues: { login: '', password: '' },
   })
-  function onInvalid(formErrors: FieldErrors<Credentials>) {
-    toast.error(
-      Object.values(formErrors)
-        .map((error) => error?.message)
-        .filter(Boolean)
-        .join(' '),
-      { id: 'sign-in-error' }
-    )
+  function submitForm() {
+    const form = formRef.current
+    if (!form || isSubmitting) return
+    const values = new FormData(form)
+    const login = String(values.get('login') ?? '').trim()
+    const password = String(values.get('password') ?? '')
+    const errors = [
+      !login ? t('identity.usernameRequired') : '',
+      !password ? t('validation.password_required') : '',
+      password.length > 256 ? t('validation.password_too_long') : '',
+    ].filter(Boolean)
+    if (errors.length > 0) {
+      toast.error(errors.join(' '), { id: 'sign-in-error' })
+      return
+    }
+    void onSubmit({ login, password })
   }
   async function onSubmit(data: Credentials) {
-    const login = data.login.trim()
+    setIsSubmitting(true)
     let owner = useIdentitySession.getState().session?.id
     let authenticated = false
     try {
@@ -103,12 +111,18 @@ export function UserAuthForm() {
             ? `${message} (${error.status})`
             : message
       toast.error(diagnostic, { id: 'sign-in-error' })
+    } finally {
+      setIsSubmitting(false)
     }
   }
   return (
     <form
+      ref={formRef}
       noValidate
-      onSubmit={(event) => void handleSubmit(onSubmit, onInvalid)(event)}
+      onSubmit={(event) => {
+        event.preventDefault()
+        submitForm()
+      }}
       className='grid gap-6'
     >
       <FloatingLabelField
@@ -116,25 +130,14 @@ export function UserAuthForm() {
         icon={UserRound}
         type='text'
         autoComplete='username'
-        aria-invalid={!!errors.login}
-        {...register('login', {
-          validate: (value) =>
-            value.trim() ? true : t('identity.usernameRequired'),
-        })}
+        {...register('login')}
       />
       <FloatingLabelField
         label={t('auth.password')}
         icon={KeyRound}
         type='password'
         autoComplete='current-password'
-        aria-invalid={!!errors.password}
-        {...register('password', {
-          validate: (value) => {
-            if (!value) return t('validation.password_required')
-            if (value.length > 256) return t('validation.password_too_long')
-            return true
-          },
-        })}
+        {...register('password')}
       />
       <Link
         to='/forgot-password'
@@ -146,10 +149,10 @@ export function UserAuthForm() {
       <OAuthButtons consent={consent} />
       <HumanVerification />
       <Button
-        type='submit'
+        type='button'
         className='auth-submit mt-2 h-11 w-full'
         disabled={isSubmitting}
-        data-invalid={Object.keys(errors).length > 0}
+        onClick={submitForm}
       >
         <LogIn className='size-4' aria-hidden='true' />
         {t('auth.sign_in_btn')}
