@@ -54,7 +54,6 @@ export function UserAuthForm() {
     let owner = useIdentitySession.getState().session?.id
     let authenticated = false
     try {
-      console.warn('[ovload-auth] api-request-start')
       const { data: session } = await apiRequest<IdentitySession>(
         'customer',
         '/auth/sessions',
@@ -81,14 +80,14 @@ export function UserAuthForm() {
       }
       await useIdentitySession.getState().refreshProfile()
       if (useIdentitySession.getState().session?.id !== session.id) return
-            await navigate({
+      resetField('password')
+      await navigate({
         to:
           session.audience === 'customer'
             ? '/user/dashboard'
             : managementHomePath(),
         replace: true,
       })
-      resetField('password')
     } catch (error) {
       if (useIdentitySession.getState().session?.id !== owner) return
       if (authenticated) useIdentitySession.getState().clear()
