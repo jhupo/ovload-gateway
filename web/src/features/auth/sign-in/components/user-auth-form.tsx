@@ -34,7 +34,6 @@ export function UserAuthForm() {
     defaultValues: { login: '', password: '' },
   })
   function submitForm(form: HTMLFormElement) {
-    if (isSubmitting) return
     const values = new FormData(form)
     const login = String(values.get('login') ?? '').trim()
     const password = String(values.get('password') ?? '')
