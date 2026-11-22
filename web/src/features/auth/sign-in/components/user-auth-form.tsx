@@ -35,10 +35,6 @@ export function UserAuthForm() {
     defaultValues: { login: '', password: '' },
   })
   function onInvalid(formErrors: FieldErrors<Credentials>) {
-    console.info(
-      '[auth-debug] validation:error',
-      JSON.stringify({ fields: Object.keys(formErrors) })
-    )
     toast.error(
       Object.values(formErrors)
         .map((error) => error?.message)
@@ -49,21 +45,9 @@ export function UserAuthForm() {
   }
   async function onSubmit(data: Credentials) {
     const login = data.login.trim()
-    console.info(
-      '[auth-debug] submit:handler',
-      JSON.stringify({ login, passwordLength: data.password.length })
-    )
     let owner = useIdentitySession.getState().session?.id
     let authenticated = false
     try {
-      console.info(
-        '[auth-debug] request:start',
-        JSON.stringify({
-          method: 'POST',
-          audience: 'customer',
-          path: '/auth/sessions',
-        })
-      )
       const { data: session } = await apiRequest<IdentitySession>(
         'customer',
         '/auth/sessions',
@@ -78,13 +62,6 @@ export function UserAuthForm() {
               : undefined,
           },
         }
-      )
-      console.info(
-        '[auth-debug] request:success',
-        JSON.stringify({
-          audience: session.audience,
-          hasSessionId: Boolean(session.id),
-        })
       )
       authenticated = true
       if (useIdentitySession.getState().session?.id !== owner) return
@@ -106,16 +83,6 @@ export function UserAuthForm() {
         replace: true,
       })
     } catch (error) {
-      console.info(
-        '[auth-debug] request:error',
-        JSON.stringify({
-          errorType: error instanceof ApiError ? 'ApiError' : typeof error,
-          status: error instanceof ApiError ? error.status : undefined,
-          code: error instanceof ApiError ? error.code : undefined,
-          requestId: error instanceof ApiError ? error.requestId : undefined,
-          message: error instanceof Error ? error.message : undefined,
-        })
-      )
       if (useIdentitySession.getState().session?.id !== owner) return
       if (authenticated) useIdentitySession.getState().clear()
       const message =
@@ -141,10 +108,7 @@ export function UserAuthForm() {
   return (
     <form
       noValidate
-      onSubmit={(event) => {
-        console.info('[auth-debug] form:submit')
-        void handleSubmit(onSubmit, onInvalid)(event)
-      }}
+      onSubmit={(event) => void handleSubmit(onSubmit, onInvalid)(event)}
       className='grid gap-6'
     >
       <FloatingLabelField
@@ -186,7 +150,6 @@ export function UserAuthForm() {
         className='auth-submit mt-2 h-11 w-full'
         disabled={isSubmitting}
         data-invalid={Object.keys(errors).length > 0}
-        onClick={() => console.info('[auth-debug] button:click')}
       >
         <LogIn className='size-4' aria-hidden='true' />
         {t('auth.sign_in_btn')}

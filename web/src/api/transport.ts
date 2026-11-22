@@ -79,15 +79,6 @@ export async function transportRequest({
         : body instanceof Blob
           ? body
           : JSON.stringify(body)
-    console.info(
-      '[auth-debug] fetch:start',
-      JSON.stringify({
-        method,
-        url: endpoint(audience, path),
-        hasBody: requestBody !== undefined,
-        credentialMode: 'include',
-      })
-    )
     const response = await fetch(endpoint(audience, path), {
       method,
       headers,
@@ -98,24 +89,11 @@ export async function transportRequest({
         : AbortSignal.timeout(timeoutMs),
       body: requestBody,
     })
-    console.info(
-      '[auth-debug] fetch:response',
-      JSON.stringify({ status: response.status, url: response.url })
-    )
     if (response.status === 401 && !isPublic && current?.id)
       sessionPort().invalidateSession(current.id)
     if (!isPublic && current?.id && sessionPort().getSession()?.id !== current.id)
       throw new ApiError(401, 'identity.unauthorized', 'Session changed', undefined, current.id)
     return response
-  } catch (error) {
-    console.info(
-      '[auth-debug] fetch:error',
-      JSON.stringify({
-        errorType: error instanceof Error ? error.name : typeof error,
-        message: error instanceof Error ? error.message : undefined,
-      })
-    )
-    throw error
   } finally {
     if (isPublic && method !== 'GET') resetHumanVerification()
   }
