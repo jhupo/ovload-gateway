@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -26,7 +26,6 @@ export function UserAuthForm() {
   const queryClient = useQueryClient()
   const policy = useAuthPolicy()
   const [consent, setConsent] = useState<number | null>(null)
-  const formRef = useRef<HTMLFormElement>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const {
     register,
@@ -34,9 +33,8 @@ export function UserAuthForm() {
   } = useForm<Credentials>({
     defaultValues: { login: '', password: '' },
   })
-  function submitForm() {
-    const form = formRef.current
-    if (!form || isSubmitting) return
+  function submitForm(form: HTMLFormElement) {
+    if (isSubmitting) return
     const values = new FormData(form)
     const login = String(values.get('login') ?? '').trim()
     const password = String(values.get('password') ?? '')
@@ -118,11 +116,10 @@ export function UserAuthForm() {
   }
   return (
     <form
-      ref={formRef}
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
-        submitForm()
+        submitForm(event.currentTarget)
       }}
       className='grid gap-6'
     >
@@ -150,10 +147,9 @@ export function UserAuthForm() {
       <OAuthButtons consent={consent} />
       <HumanVerification />
       <Button
-        type='button'
+        type='submit'
         className='auth-submit mt-2 h-11 w-full'
         disabled={isSubmitting}
-        onClick={submitForm}
       >
         <LogIn className='size-4' aria-hidden='true' />
         {t('auth.sign_in_btn')}
