@@ -21,6 +21,7 @@
     "single": "单条",
     "batch": "批量",
     "editorDescription": "为账号配置网络出口",
+    "autoLocationHelp": "位置和时区会在连接测试时根据代理出口自动检测。",
     "addressHelp": "支持 HTTP、HTTPS、SOCKS5 和 SOCKS5H，地址可包含用户名和密码",
     "keepAuthentication": "留空保留已保存的地址和认证；替换时填写完整地址",
     "customLocation": "自定义时区位置",

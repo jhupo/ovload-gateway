@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useBlocker } from '@tanstack/react-router'
-import { Eye, EyeOff, LocateFixed, Save, Wifi } from 'lucide-react'
+import { Eye, EyeOff, Save, Wifi } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { proxies, type ProxyLocation, type ProxyRecord } from '@/api/proxies'
+import { proxies, type ProxyRecord } from '@/api/proxies'
 import {
   hasIdentitySession,
   useIdentitySession,
@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/confirm-dialog'
-import { SwitchLabeled as Switch } from '@/components/shadcn-space/switch/switch-07'
 import { ProxyDialog } from './components'
 import {
   hasProxyControlCharacters,
@@ -23,12 +22,6 @@ import {
   validProxyUrl,
 } from './import'
 
-const emptyLocation: ProxyLocation = {
-  country: '',
-  region: '',
-  city: '',
-  timezone: '',
-}
 export function ProxyEditor({
   item,
   owner,
@@ -47,8 +40,6 @@ export function ProxyEditor({
   const [initial] = useState(() => ({
     name: item?.name ?? '',
     url: item?.hasAuthentication ? '' : (item?.endpoint ?? ''),
-    custom: !!item?.location && !item.autoLocation,
-    location: item?.location ?? emptyLocation,
   }))
   const [draft, setDraft] = useState(initial)
   const [tab, setTab] = useState('single'),
@@ -93,33 +84,10 @@ export function ProxyEditor({
       )
         throw new Error(t('proxies.errors.name'))
       const proxyUrl = urlValue()
-      let location: ProxyLocation | null = null
-      if (draft.custom) {
-        location = {
-          country: draft.location.country.trim().toLocaleUpperCase('en-US'),
-          region: draft.location.region.trim(),
-          city: draft.location.city.trim(),
-          timezone: draft.location.timezone.trim(),
-        }
-        if (
-          !/^[A-Z]{2}$/.test(location.country) ||
-          !location.region ||
-          !location.city ||
-          Object.values(location).some((v) => hasProxyControlCharacters(v))
-        )
-          throw new Error(t('proxyDesign.locationInvalid'))
-        try {
-          new Intl.DateTimeFormat('en', {
-            timeZone: location.timezone,
-          }).format()
-        } catch {
-          throw new Error(t('proxyDesign.locationInvalid'))
-        }
-      }
       const input = {
         name: draft.name.trim(),
-        autoLocation: !draft.custom,
-        location,
+        autoLocation: true,
+        location: null,
         ...(proxyUrl ? { proxyUrl } : {}),
       }
       if (record)
@@ -162,7 +130,7 @@ export function ProxyEditor({
   })
   const probe = useMutation({
     gcTime: 0,
-    mutationFn: async (fillLocation: boolean) => {
+    mutationFn: async () => {
       requireOwner()
       const url = urlValue()
       let result
@@ -176,15 +144,6 @@ export function ProxyEditor({
         result = tested.data.lastTest
       } else result = await proxies.probe(url ?? draft.url.trim(), true)
       if (!result?.success) throw new Error(t('liveInfrastructure.testFailed'))
-      if (fillLocation) {
-        if (result.location.status !== 'detected' || !result.location.location)
-          throw new Error(t('proxyDesign.detectFailed'))
-        setDraft((old) => ({
-          ...old,
-          custom: true,
-          location: result.location.location!,
-        }))
-      }
       return result
     },
     onSuccess: (result) => {
@@ -221,7 +180,8 @@ export function ProxyEditor({
         title={t(item ? 'proxies.edit' : 'proxies.add')}
         description={t('proxyDesign.editorDescription')}
         busy={busy}
-        fixedHeight
+        compact={tab === 'single'}
+        fixedHeight={tab === 'batch'}
         onClose={close}
         restoreFocus={restoreFocus}
       >
@@ -296,7 +256,7 @@ export function ProxyEditor({
                     <div className='flex items-center gap-2'>
                       <Input
                         id='proxy-url'
-                        type={showUrl ? 'text' : 'password'}
+                        type={record?.hasAuthentication && !showUrl ? 'password' : 'text'}
                         aria-describedby='proxy-url-help'
                         required={!record}
                         autoComplete='new-password'
@@ -323,70 +283,9 @@ export function ProxyEditor({
                       </Button>
                     </div>
                   </div>
-                  <div className='space-y-4 border-t pt-4'>
-                    <div className='flex items-center justify-between gap-4'>
-                      <div className='flex items-center gap-3'>
-                        <Switch
-                          id='proxy-custom-location'
-                          checked={draft.custom}
-                          onCheckedChange={(custom) =>
-                            setDraft((old) => ({
-                              ...old,
-                              custom,
-                            }))
-                          }
-                        />
-                        <Label htmlFor='proxy-custom-location'>
-                          {t('proxyDesign.customLocation')}
-                        </Label>
-                      </div>
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='ghost'
-                        aria-label={t('proxyDesign.detectLocation')}
-                        title={t('proxyDesign.detectLocation')}
-                        onClick={() => probe.mutate(true)}
-                      >
-                        <LocateFixed />
-                      </Button>
-                    </div>
-                    {draft.custom && (
-                      <div className='grid gap-4 sm:grid-cols-2'>
-                        {(
-                          ['country', 'region', 'city', 'timezone'] as const
-                        ).map((key) => (
-                          <div key={key} className='space-y-2'>
-                            <Label htmlFor={`proxy-${key}`}>
-                              {t('proxyDesign.' + key)}
-                            </Label>
-                            <Input
-                              id={`proxy-${key}`}
-                              required
-                              value={draft.location[key]}
-                              maxLength={key === 'country' ? 2 : 128}
-                              placeholder={
-                                key === 'timezone'
-                                  ? 'Asia/Shanghai'
-                                  : key === 'country'
-                                    ? 'CN'
-                                    : undefined
-                              }
-                              onChange={(e) =>
-                                setDraft((old) => ({
-                                  ...old,
-                                  location: {
-                                    ...old.location,
-                                    [key]: e.target.value,
-                                  },
-                                }))
-                              }
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <p className='border-t pt-4 text-xs leading-relaxed text-muted-foreground'>
+                    {t('proxyDesign.autoLocationHelp')}
+                  </p>
                 </>
               )}
             </fieldset>
@@ -405,7 +304,7 @@ export function ProxyEditor({
                 type='button'
                 variant='outline'
                 disabled={busy}
-                onClick={() => probe.mutate(false)}
+                onClick={() => probe.mutate()}
               >
                 <Wifi />
                 {t('proxies.test')}

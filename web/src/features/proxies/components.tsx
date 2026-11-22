@@ -71,6 +71,7 @@ export function ProxyDialog({
   title,
   description,
   wide = false,
+  compact = false,
   fixedHeight = false,
   busy,
   onClose,
@@ -80,6 +81,7 @@ export function ProxyDialog({
   title: string
   description: string
   wide?: boolean
+  compact?: boolean
   fixedHeight?: boolean
   busy: boolean
   onClose: () => void
@@ -94,7 +96,7 @@ export function ProxyDialog({
       }}
     >
       <DialogContent
-        className={`flex max-h-[calc(100dvh-2rem)] flex-col gap-6 ${wide ? 'sm:max-w-5xl' : 'sm:max-w-2xl'} ${fixedHeight ? 'h-[min(32rem,calc(100dvh-2rem))]' : ''}`}
+        className={`flex max-h-[calc(100dvh-2rem)] flex-col gap-6 ${compact ? 'sm:max-w-lg' : wide ? 'sm:max-w-5xl' : 'sm:max-w-2xl'} ${fixedHeight ? 'h-[min(32rem,calc(100dvh-2rem))]' : ''}`}
         onCloseAutoFocus={
           restoreFocus
             ? (e) => {

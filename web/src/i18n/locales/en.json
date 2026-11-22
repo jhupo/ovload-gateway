@@ -21,6 +21,7 @@
     "single": "Single",
     "batch": "Batch",
     "editorDescription": "Configure the network exit for accounts",
+    "autoLocationHelp": "Location and timezone are detected from the proxy exit during connection tests.",
     "addressHelp": "HTTP, HTTPS, SOCKS5 and SOCKS5H; the URL may include a username and password",
     "keepAuthentication": "Leave blank to keep the saved address and authentication; enter a full URL to replace them",
     "customLocation": "Custom location and timezone",
