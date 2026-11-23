@@ -146,6 +146,8 @@
   "authorizing": "授权中…",
   "openaiCallbackPlaceholder": "粘贴完整回调地址",
   "quotaWindow": "用量窗口",
+  "sharedQuota": "通用额度",
+  "quotaUsageRate": "使用率",
   "concurrencyDetails": "并发明细",
   "activeConcurrency": "实时并发",
   "observedAt": "观测时间",

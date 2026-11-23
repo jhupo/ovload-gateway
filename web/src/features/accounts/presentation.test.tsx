@@ -1,7 +1,8 @@
 import { expect, test } from 'vitest'
 import { render } from 'vitest-browser-react'
+import { userEvent } from 'vitest/browser'
 import type { UpstreamAccount } from '@/api/upstream-accounts'
-import { QuotaWindows } from './presentation'
+import { AccountQuotaCell, QuotaWindows } from './presentation'
 
 // The server returns both windows as shortTerm; duration establishes their order.
 const quota: UpstreamAccount['quota'] = {
@@ -45,18 +46,35 @@ test('renders both real quota percentages and reset times in the usage detail', 
   expect(progress[1].getAttribute('aria-label')).toContain('周额度')
 })
 
-test('shows both windows in a compact table cell without creating a daily limit', async () => {
-  const screen = await render(<QuotaWindows account={{ quota }} compact />)
+test('opens both reported quota windows from the table summary', async () => {
+  const screen = await render(
+    <AccountQuotaCell account={{ quota, authenticationKind: 'oauth' }} />
+  )
+  const summary = screen.getByRole('button', { name: /shared quota/i })
+  await expect.element(screen.getByText('100%', { exact: true })).toBeVisible()
+  await expect.element(summary).toHaveAttribute('aria-expanded', 'false')
+
+  await userEvent.click(summary)
+
+  const details = screen.getByRole('dialog')
+  await expect.element(summary).toHaveAttribute('aria-expanded', 'true')
+  await expect.element(details.getByText('5H', { exact: true })).toBeVisible()
+  await expect.element(details.getByText('7D', { exact: true })).toBeVisible()
   await expect
-    .element(screen.getByText('5小时额度', { exact: true }))
+    .element(details.getByRole('progressbar', { name: /5小时额度/ }))
+    .toHaveAttribute('aria-valuenow', '100')
+  await expect
+    .element(details.getByRole('progressbar', { name: /周额度/ }))
+    .toHaveAttribute('aria-valuenow', '31')
+  await expect
+    .element(details.getByText('2026-11-19 01:31:36'))
     .toBeVisible()
   await expect
-    .element(screen.getByText('周额度', { exact: true }))
+    .element(details.getByText('2026-11-21 22:39:39'))
     .toBeVisible()
-  expect(screen.container.textContent).not.toContain('1日额度')
-  expect(
-    screen.container.querySelector('[title]')?.getAttribute('title')
-  ).toContain('2026-11-19 01:31:36')
+  await expect
+    .element(details.getByText('1日额度', { exact: true }))
+    .not.toBeInTheDocument()
 })
 
 test('keeps unavailable usage indeterminate rather than claiming zero percent', async () => {

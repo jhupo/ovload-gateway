@@ -70,12 +70,13 @@ import { AccountEditor } from './editor'
 import { AccountOnboarding } from './onboarding'
 import { accountPanels, type AccountPanel } from './panels'
 import {
+  AccountCapacityButton,
   AccountGroups,
   AccountIdentity,
   AccountPlan,
+  AccountQuotaCell,
   AccountStatus,
   QuotaSummary,
-  QuotaWindows,
   AccountProvider,
 } from './presentation'
 import { invalidateAccountQueries } from './query-cache'
@@ -122,6 +123,7 @@ function AccountsContent() {
   ]
   const [sorting, setSorting] = useState<SortingState>([])
   const [visibility, setVisibility] = useState<VisibilityState>({
+    capacity: false,
     planType: true,
     expiresAt: false,
   })
@@ -322,40 +324,27 @@ function AccountsContent() {
       id: 'capacity',
       header: tr('capacity'),
       enableSorting: false,
-      cell: ({ row }) => {
-        const account = row.original
-        return (
-          <Button
-            type='button'
-            variant='ghost'
-            size='sm'
-            className='h-8 px-2 font-normal tabular-nums'
-            aria-label={`${tr('concurrencyDetails')}: ${account.name}`}
-            onClick={(event) => {
-              event.stopPropagation()
-              setConcurrency(account)
-            }}
-          >
-            {number(account.capacity.usedSlots)} /{' '}
-            {account.capacity.totalSlots === null
-              ? tr('unlimited')
-              : number(account.capacity.totalSlots)}
-          </Button>
-        )
-      },
+      cell: ({ row }) => (
+        <AccountCapacityButton account={row.original} onOpen={setConcurrency} />
+      ),
     },
     {
       id: 'quota',
       header: tr('quotaWindow'),
       enableSorting: false,
-      cell: ({ row }) => (
-        <div className='max-w-48 min-w-36'>
-          {row.original.authenticationKind === 'oauth' &&
-          row.original.quota.windows.length ? (
-            <QuotaWindows account={row.original} compact />
-          ) : (
-            <span className='text-muted-foreground'>—</span>
-          )}
+      cell: ({ row, table }) => (
+        <div className='w-52 max-w-full'>
+          <AccountQuotaCell
+            account={row.original}
+            capacity={
+              !table.getColumn('capacity')?.getIsVisible() && (
+                <AccountCapacityButton
+                  account={row.original}
+                  onOpen={setConcurrency}
+                />
+              )
+            }
+          />
         </div>
       ),
     },
@@ -821,11 +810,16 @@ function AccountsContent() {
                               )}
                             </div>
                           ))}
-                      {table.getColumn('quota')?.getIsVisible() &&
-                        row.original.authenticationKind === 'oauth' &&
-                        row.original.quota.windows.length > 0 && (
-                          <QuotaWindows account={row.original} compact />
-                        )}
+                      {row.getVisibleCells().map((cell) =>
+                        cell.column.id === 'quota' ? (
+                          <div key={cell.id}>
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext()
+                            )}
+                          </div>
+                        ) : null
+                      )}
                       {table.getColumn('usage')?.getIsVisible() && (
                         <QuotaSummary account={row.original} />
                       )}

@@ -146,6 +146,8 @@
   "authorizing": "Authorizing…",
   "openaiCallbackPlaceholder": "Paste the complete callback URL",
   "quotaWindow": "Usage windows",
+  "sharedQuota": "Shared quota",
+  "quotaUsageRate": "Usage",
   "concurrencyDetails": "Concurrency details",
   "activeConcurrency": "Live concurrency",
   "observedAt": "Observed",
