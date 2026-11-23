@@ -1,6 +1,7 @@
 //! PKCE authorization, owner-bound pending flows and revision-fenced token refresh.
 use super::super::{Credential, PublicApiProvider};
 use super::oauth_http::{self, Stage};
+use super::profile::ANTIGRAVITY_USER_AGENT;
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, TimeDelta, Utc};
@@ -713,55 +714,70 @@ async fn project(client: &reqwest::Client, access: &str) -> Result<String, Provi
         .or_else(|_| std::env::var("GOOGLE_CLOUD_PROJECT_ID"))
         .ok()
         .filter(|value| !value.trim().is_empty());
-    let mut last_error = None;
-    for endpoint in [
-        "https://cloudcode-pa.googleapis.com/v1internal",
-        "https://daily-cloudcode-pa.googleapis.com/v1internal",
-    ] {
-        match project_at(
-            client,
-            access,
-            project_hint.as_deref(),
-            endpoint,
-            "https://cloudresourcemanager.googleapis.com/v1/projects",
+    project_at(
+        client,
+        access,
+        project_hint.as_deref(),
+        &[
+            "https://cloudcode-pa.googleapis.com/v1internal",
+            "https://daily-cloudcode-pa.googleapis.com/v1internal",
+        ],
+        "https://cloudresourcemanager.googleapis.com/v1/projects",
+    )
+    .await
+}
+
+fn load_project_request(
+    client: &reqwest::Client,
+    access: &str,
+    endpoint: &str,
+    body: &Value,
+) -> reqwest::RequestBuilder {
+    client
+        .post(format!("{endpoint}:loadCodeAssist"))
+        .bearer_auth(access)
+        .header(reqwest::header::USER_AGENT, ANTIGRAVITY_USER_AGENT)
+        .json(body)
+}
+
+async fn load_project<'a>(
+    client: &reqwest::Client,
+    access: &str,
+    endpoints: &[&'a str],
+    body: &Value,
+) -> Result<(&'a str, Value), ProviderAdminError> {
+    let mut endpoints = endpoints.iter().copied().peekable();
+    while let Some(endpoint) = endpoints.next() {
+        match oauth_http::json_with_endpoint_fallback(
+            load_project_request(client, access, endpoint, body),
+            "gemini",
+            Stage::LoadProject,
         )
         .await
         {
-            Ok(project) => return Ok(project),
-            Err(error) => last_error = Some(error),
+            Ok(value) => return Ok((endpoint, value)),
+            Err((error, retryable)) if !retryable || endpoints.peek().is_none() => {
+                return Err(error);
+            }
+            Err(_) => {}
         }
     }
-    Err(last_error.unwrap_or_else(upstream))
+    Err(upstream())
 }
 
 async fn project_at(
     client: &reqwest::Client,
     access: &str,
     project_hint: Option<&str>,
-    endpoint: &str,
+    endpoints: &[&str],
     projects_url: &str,
 ) -> Result<String, ProviderAdminError> {
-    let metadata = json!({
-        "ideType":"ANTIGRAVITY",
-        "platform":"LINUX",
-        "pluginType":"GEMINI",
-    });
-    let mut load = json!({"metadata":metadata});
+    let mut load = json!({"metadata":{"ideType":"ANTIGRAVITY"}});
     if let Some(project) = project_hint {
         load["cloudaicompanionProject"] = json!(project);
         load["metadata"]["duetProject"] = json!(project);
     }
-    let value = oauth_http::json(
-        super::profile::antigravity_request(
-            client
-                .post(format!("{endpoint}:loadCodeAssist"))
-                .bearer_auth(access),
-        )
-        .json(&load),
-        "gemini",
-        Stage::LoadProject,
-    )
-    .await?;
+    let (endpoint, value) = load_project(client, access, endpoints, &load).await?;
     if let Some(project) = project_id(&value) {
         return Ok(project);
     }
@@ -790,19 +806,22 @@ async fn project_at(
     };
     let mut body = json!({
         "tierId": tier,
-        "metadata":metadata,
+        "metadata": {
+            "ideType":"ANTIGRAVITY",
+            "platform":"PLATFORM_UNSPECIFIED",
+            "pluginType":"GEMINI",
+        },
     });
     if let Some(project) = onboard_project {
         body["cloudaicompanionProject"] = json!(project);
         body["metadata"]["duetProject"] = json!(project);
     }
     let mut response = oauth_http::json(
-        super::profile::antigravity_request(
-            client
-                .post(format!("{endpoint}:onboardUser"))
-                .bearer_auth(access),
-        )
-        .json(&body),
+        client
+            .post(format!("{endpoint}:onboardUser"))
+            .bearer_auth(access)
+            .header(reqwest::header::USER_AGENT, ANTIGRAVITY_USER_AGENT)
+            .json(&body),
         "gemini",
         Stage::Onboard,
     )
@@ -835,11 +854,10 @@ async fn project_at(
             .ok_or_else(|| Stage::Poll.failure("gemini", "invalid_operation", None))?;
         tokio::time::sleep(Duration::from_secs(5)).await;
         response = oauth_http::json(
-            super::profile::antigravity_request(
-                client
-                    .get(format!("{endpoint}/{operation}"))
-                    .bearer_auth(access),
-            ),
+            client
+                .get(format!("{endpoint}/{operation}"))
+                .bearer_auth(access)
+                .header(reqwest::header::USER_AGENT, ANTIGRAVITY_USER_AGENT),
             "gemini",
             Stage::Poll,
         )
@@ -857,12 +875,7 @@ async fn discover_project(
 ) -> Result<String, ProviderAdminError> {
     // Provisioning may complete before its operation includes the managed project.
     let refreshed = oauth_http::json(
-        super::profile::antigravity_request(
-            client
-                .post(format!("{endpoint}:loadCodeAssist"))
-                .bearer_auth(access),
-        )
-        .json(load),
+        load_project_request(client, access, endpoint, load),
         "gemini",
         Stage::LoadProject,
     )
@@ -871,7 +884,7 @@ async fn discover_project(
         return Ok(project);
     }
     let projects = oauth_http::json(
-        super::profile::antigravity_request(client.get(projects_url).bearer_auth(access)),
+        client.get(projects_url).bearer_auth(access),
         "gemini",
         Stage::DiscoverProject,
     )
@@ -919,12 +932,7 @@ async fn discover_project(
     confirm["cloudaicompanionProject"] = json!(selected);
     confirm["metadata"]["duetProject"] = json!(selected);
     let confirmed = oauth_http::json(
-        super::profile::antigravity_request(
-            client
-                .post(format!("{endpoint}:loadCodeAssist"))
-                .bearer_auth(access),
-        )
-        .json(&confirm),
+        load_project_request(client, access, endpoint, &confirm),
         "gemini",
         Stage::LoadProject,
     )
@@ -952,14 +960,9 @@ mod tests {
     #[tokio::test]
     async fn gemini_initialization_polls_when_google_omits_done_false() {
         let server = MockServer::start().await;
-        let metadata = json!({
-            "ideType":"ANTIGRAVITY",
-            "platform":"LINUX",
-            "pluginType":"GEMINI"
-        });
         Mock::given(method("POST"))
             .and(path("/v1internal:loadCodeAssist"))
-            .and(body_json(json!({"metadata":metadata})))
+            .and(body_json(json!({"metadata":{"ideType":"ANTIGRAVITY"}})))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "allowedTiers":[{"id":"free-tier","isDefault":true}]
             })))
@@ -968,7 +971,14 @@ mod tests {
             .await;
         Mock::given(method("POST"))
             .and(path("/v1internal:onboardUser"))
-            .and(body_json(json!({"tierId":"free-tier","metadata":metadata})))
+            .and(body_json(json!({
+                "tierId":"free-tier",
+                "metadata":{
+                    "ideType":"ANTIGRAVITY",
+                    "platform":"PLATFORM_UNSPECIFIED",
+                    "pluginType":"GEMINI"
+                }
+            })))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "name":"operations/new-user"
             })))
@@ -987,12 +997,54 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &format!("{}/v1internal", server.uri()),
+            &[&format!("{}/v1internal", server.uri())],
             &format!("{}/projects", server.uri()),
         )
         .await
         .unwrap();
         assert_eq!(result, "managed-project");
+        let requests = server.received_requests().await.unwrap();
+        assert!(requests.iter().all(|request| {
+            !request.headers.contains_key("client-metadata")
+                && request.headers["user-agent"] == ANTIGRAVITY_USER_AGENT
+        }));
+    }
+
+    #[tokio::test]
+    async fn gemini_project_fallback_requires_a_retryable_initial_failure() {
+        for (status, expect_fallback) in [(400, false), (503, true)] {
+            let server = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/primary:loadCodeAssist"))
+                .respond_with(ResponseTemplate::new(status))
+                .expect(1)
+                .mount(&server)
+                .await;
+            Mock::given(method("POST"))
+                .and(path("/secondary:loadCodeAssist"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "cloudaicompanionProject":"managed-project"
+                })))
+                .expect(if expect_fallback { 1 } else { 0 })
+                .mount(&server)
+                .await;
+            let result = project_at(
+                &client(None).unwrap(),
+                "fixture-access",
+                None,
+                &[
+                    &format!("{}/primary", server.uri()),
+                    &format!("{}/secondary", server.uri()),
+                ],
+                &format!("{}/projects", server.uri()),
+            )
+            .await;
+            if expect_fallback {
+                assert_eq!(result.unwrap(), "managed-project");
+            } else {
+                assert!(result.is_err());
+            }
+        }
     }
 
     #[tokio::test]
@@ -1010,7 +1062,7 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &format!("{}/v1internal", server.uri()),
+            &[&format!("{}/v1internal", server.uri())],
             &format!("{}/projects", server.uri()),
         )
         .await
@@ -1049,7 +1101,7 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &format!("{}/v1internal", server.uri()),
+            &[&format!("{}/v1internal", server.uri())],
             &format!("{}/projects", server.uri()),
         )
         .await
@@ -1086,7 +1138,7 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &format!("{}/v1internal", server.uri()),
+            &[&format!("{}/v1internal", server.uri())],
             &format!("{}/projects", server.uri()),
         )
         .await

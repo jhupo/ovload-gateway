@@ -24,7 +24,7 @@ impl Stage {
         }
     }
 
-    fn message(self, provider: &str, reason: &str) -> &'static str {
+    fn message(self, provider: &str, reason: &str, status: Option<u16>) -> &'static str {
         if provider == "gemini" {
             match reason {
                 "timeout" | "connect" => {
@@ -34,9 +34,14 @@ impl Stage {
                 "invalid_client" | "unauthorized_client" => {
                     "Google 拒绝了 OAuth 客户端配置，请检查服务端 Gemini 授权配置"
                 }
+                "permission_denied" => "Google 拒绝了 Gemini 授权流程中的操作，请检查账号的 Code Assist 使用权限",
+                "resource_exhausted" => "Google 限制了本次 Gemini 授权请求，请稍后重试",
                 _ => match self {
                     Self::Token => "Google 令牌交换失败，请重新授权并检查服务端授权日志",
                     Self::Profile => "无法读取 Google 账号信息，请检查出站网络后重新授权",
+                    Self::LoadProject if status == Some(400) => {
+                        "上游拒绝了 Gemini Code Assist 项目查询请求（HTTP 400），请检查网关的 Antigravity 请求参数"
+                    }
                     Self::LoadProject => {
                         "无法读取 Gemini Code Assist 项目，请检查账号资格及出站网络"
                     }
@@ -73,7 +78,7 @@ impl Stage {
             "Subscription OAuth request failed"
         );
         ProviderAdminError::new(ProviderAdminErrorKind::BadGateway)
-            .with_public_message(self.message(provider, reason))
+            .with_public_message(self.message(provider, reason, status))
     }
 }
 
@@ -86,8 +91,12 @@ fn error_code(value: &Value) -> &'static str {
         Some("invalid_grant") => "invalid_grant",
         Some("invalid_client") => "invalid_client",
         Some("unauthorized_client") => "unauthorized_client",
+        Some("INVALID_ARGUMENT") => "invalid_argument",
+        Some("FAILED_PRECONDITION") => "failed_precondition",
+        Some("UNAUTHENTICATED") => "unauthenticated",
         Some("access_denied" | "PERMISSION_DENIED") => "permission_denied",
         Some("RESOURCE_EXHAUSTED") => "resource_exhausted",
+        Some("UNAVAILABLE") => "upstream_unavailable",
         _ => "http_rejected",
     }
 }
@@ -97,6 +106,16 @@ pub(super) async fn json(
     provider: &str,
     stage: Stage,
 ) -> Result<Value, ProviderAdminError> {
+    json_with_endpoint_fallback(request, provider, stage)
+        .await
+        .map_err(|(error, _)| error)
+}
+
+pub(super) async fn json_with_endpoint_fallback(
+    request: reqwest::RequestBuilder,
+    provider: &str,
+    stage: Stage,
+) -> Result<Value, (ProviderAdminError, bool)> {
     let response = request.send().await.map_err(|error| {
         let reason = if error.is_timeout() {
             "timeout"
@@ -105,24 +124,60 @@ pub(super) async fn json(
         } else {
             "transport"
         };
-        stage.failure(provider, reason, None)
+        (stage.failure(provider, reason, None), !error.is_builder())
     })?;
     let status = response.status();
+    let fallback = matches!(status.as_u16(), 404 | 408 | 429 | 500..=599);
     let body = super::super::network::bounded_body(response, 2 * 1024 * 1024)
         .await
-        .map_err(|_| stage.failure(provider, "response_body", Some(status.as_u16())))?;
+        .map_err(|_| {
+            (
+                stage.failure(provider, "response_body", Some(status.as_u16())),
+                fallback,
+            )
+        })?;
     let parsed = serde_json::from_slice::<Value>(&body);
     if !status.is_success() {
         let reason = parsed.as_ref().map_or("http_rejected", error_code);
-        return Err(stage.failure(provider, reason, Some(status.as_u16())));
+        return Err((
+            stage.failure(provider, reason, Some(status.as_u16())),
+            fallback,
+        ));
     }
-    parsed.map_err(|_| stage.failure(provider, "invalid_json", Some(status.as_u16())))
+    parsed.map_err(|_| {
+        (
+            stage.failure(provider, "invalid_json", Some(status.as_u16())),
+            false,
+        )
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+
+    #[tokio::test]
+    async fn project_bad_request_has_safe_message_and_no_endpoint_fallback() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "error": {"status": "INVALID_ARGUMENT", "message": "private upstream detail"}
+            })))
+            .mount(&server)
+            .await;
+        let (error, fallback) = json_with_endpoint_fallback(
+            reqwest::Client::new().post(server.uri()),
+            "gemini",
+            Stage::LoadProject,
+        )
+        .await
+        .unwrap_err();
+        assert!(!fallback);
+        assert_eq!(error.kind(), ProviderAdminErrorKind::BadGateway);
+        assert!(error.public_message().unwrap().contains("HTTP 400"));
+        assert!(!format!("{error:?}").contains("private upstream detail"));
+    }
 
     #[tokio::test]
     async fn google_rejection_has_safe_specific_message() {
@@ -168,6 +223,10 @@ mod tests {
         assert_eq!(
             error_code(&serde_json::json!({"error":"arbitrary-secret"})),
             "http_rejected"
+        );
+        assert_eq!(
+            error_code(&serde_json::json!({"error":{"status":"INVALID_ARGUMENT"}})),
+            "invalid_argument"
         );
         let error = Stage::Token.failure("gemini", "timeout", None);
         assert!(error.public_message().unwrap().contains("出站代理"));

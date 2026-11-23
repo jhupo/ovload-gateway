@@ -34,6 +34,13 @@ pub(crate) struct CaptureLayer(pub Arc<Capture>);
 #[derive(Default, Clone)]
 struct Fields(serde_json::Map<String, Value>);
 impl Visit for Fields {
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        if field.name() == "upstream_status" && (100..=599).contains(&value) {
+            self.0.insert(field.name().into(), json!(value));
+        } else {
+            self.record_debug(field, &value);
+        }
+    }
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
         self.record_str(field, &format!("{value:?}"));
     }
@@ -296,7 +303,7 @@ mod tests {
         tracing::subscriber::with_default(subscriber, || {
             let span = tracing::info_span!("request", request_id = "monitoring-unit-request");
             let _entered = span.enter();
-            tracing::info!(target:"ovload_test",password="should-not-be-captured","request completed");
+            tracing::info!(target:"ovload_test",upstream_status=Some(400u16),password="should-not-be-captured","request completed");
             tracing::info!(target:"gateway_startup","gateway ready");
             tracing::info!(target:"request_dump","raw request secret");
             tracing::info!(target:"oauth_recovery","raw OAuth secret");
@@ -304,6 +311,7 @@ mod tests {
         let rows = capture.records.lock().unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0]["requestId"], "monitoring-unit-request");
+        assert_eq!(rows[0]["fields"]["upstream_status"], 400);
         assert!(!rows[0].to_string().contains("should-not-be-captured"));
     }
     #[test]

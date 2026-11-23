@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 const ANTIGRAVITY_METADATA: &str =
     r#"{"ideType":"ANTIGRAVITY","platform":"LINUX","pluginType":"GEMINI"}"#;
-const ANTIGRAVITY_USER_AGENT: &str =
+pub(super) const ANTIGRAVITY_USER_AGENT: &str =
     "antigravity/cli/1.1.27 (aidev_client; os_type=linux; arch=amd64; auth_method=consumer)";
 
 #[derive(Clone, Serialize, Deserialize)]
