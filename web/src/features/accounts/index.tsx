@@ -252,6 +252,19 @@ function AccountsContent() {
       return 'sticky right-0 z-10 w-28 min-w-28 border-l bg-background'
     return undefined
   }
+  const renderQuota = (account: UpstreamAccount, side: 'right' | 'bottom') => (
+    <div className='w-52 max-w-full'>
+      <AccountQuotaCell
+        account={account}
+        side={side}
+        capacity={
+          visibility.capacity === false && (
+            <AccountCapacityButton account={account} onOpen={setConcurrency} />
+          )
+        }
+      />
+    </div>
+  )
   const columns: ColumnDef<UpstreamAccount>[] = [
     ...(canManage
       ? [
@@ -332,21 +345,7 @@ function AccountsContent() {
       id: 'quota',
       header: tr('quotaWindow'),
       enableSorting: false,
-      cell: ({ row, table }) => (
-        <div className='w-52 max-w-full'>
-          <AccountQuotaCell
-            account={row.original}
-            capacity={
-              !table.getColumn('capacity')?.getIsVisible() && (
-                <AccountCapacityButton
-                  account={row.original}
-                  onOpen={setConcurrency}
-                />
-              )
-            }
-          />
-        </div>
-      ),
+      cell: ({ row }) => renderQuota(row.original, 'right'),
     },
     {
       id: 'usage',
@@ -810,16 +809,8 @@ function AccountsContent() {
                               )}
                             </div>
                           ))}
-                      {row.getVisibleCells().map((cell) =>
-                        cell.column.id === 'quota' ? (
-                          <div key={cell.id}>
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </div>
-                        ) : null
-                      )}
+                      {table.getColumn('quota')?.getIsVisible() &&
+                        renderQuota(row.original, 'bottom')}
                       {table.getColumn('usage')?.getIsVisible() && (
                         <QuotaSummary account={row.original} />
                       )}

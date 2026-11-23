@@ -241,9 +241,11 @@ export function AccountCapacityButton({
 export function AccountQuotaCell({
   account,
   capacity,
+  side = 'right',
 }: {
   account: Pick<UpstreamAccount, 'quota' | 'authenticationKind'>
   capacity?: ReactNode
+  side?: 'right' | 'bottom'
 }) {
   const { t, i18n } = useTranslation()
   const [preview, setPreview] = useState<'hover' | 'pinned' | null>(null)
@@ -335,7 +337,7 @@ export function AccountQuotaCell({
         </div>
       </PopoverAnchor>
       <PopoverContent
-        side='right'
+        side={side}
         sideOffset={12}
         align='center'
         collisionPadding={12}
