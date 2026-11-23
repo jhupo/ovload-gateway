@@ -228,12 +228,12 @@ function AccountsContent() {
     if (owner && !mutation.isPending)
       mutation.mutate({ action, account, owner })
   }
-  const date = (value: string | null) =>
+  const date = (value: string | null, timeZone?: 'UTC') =>
     value
       ? new Intl.DateTimeFormat(i18n.language, {
           dateStyle: 'short',
           timeStyle: 'short',
-          timeZone: 'UTC',
+          timeZone,
         }).format(new Date(value))
       : tr('unknown')
   const number = (value: number | null) =>
@@ -242,14 +242,16 @@ function AccountsContent() {
       : new Intl.NumberFormat(i18n.language).format(value)
   const pinnedColumnClass = (id: string) => {
     if (id === 'select')
-      return 'sticky left-0 z-10 w-10 min-w-10 max-w-10 bg-background'
+      return 'sticky left-0 z-10 w-10 min-w-10 max-w-10'
     if (id === 'identity')
       return cn(
-        'sticky z-10 w-48 max-w-48 min-w-48 border-r bg-background',
+        'sticky z-10 w-40 min-w-40 max-w-40 border-r',
         canManage ? 'left-10' : 'left-0'
       )
     if (id === 'actions')
-      return 'sticky right-0 z-10 w-28 min-w-28 border-l bg-background'
+      return canManage
+        ? 'sticky right-0 z-10 w-24 min-w-24 border-l'
+        : 'sticky right-0 z-10 w-16 min-w-16 border-l'
     return undefined
   }
   const renderQuota = (account: UpstreamAccount, side: 'right' | 'bottom') => (
@@ -301,7 +303,7 @@ function AccountsContent() {
       header: tr('account'),
       enableSorting: false,
       cell: ({ row: { original: a } }) => (
-        <div className='w-44 text-left'>
+        <div className='w-36 text-left'>
           <AccountIdentity account={a} />
         </div>
       ),
@@ -366,7 +368,7 @@ function AccountsContent() {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={tr('expires')} />
       ),
-      cell: ({ row }) => date(row.original.accessTokenExpiresAt),
+      cell: ({ row }) => date(row.original.accessTokenExpiresAt, 'UTC'),
     },
     {
       id: 'actions',
@@ -378,7 +380,7 @@ function AccountsContent() {
           {canManage && (
             <>
               <Button
-                size='icon-sm'
+                size='icon-xs'
                 variant='ghost'
                 title={tr('edit')}
                 aria-label={tr('edit')}
@@ -388,7 +390,7 @@ function AccountsContent() {
                 <Pencil className='size-4' />
               </Button>
               <Button
-                size='icon-sm'
+                size='icon-xs'
                 variant='ghost'
                 title={tr('delete')}
                 aria-label={tr('delete')}
@@ -402,7 +404,7 @@ function AccountsContent() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                size='icon-sm'
+                size='icon-xs'
                 variant='ghost'
                 aria-label={tr('moreActions')}
                 title={tr('moreActions')}
@@ -417,11 +419,7 @@ function AccountsContent() {
                   key={panel}
                   onSelect={() => showDetail(a, panel)}
                 >
-                  {t(
-                    panel === 'models'
-                      ? 'upstreamAccounts.models'
-                      : `accounts.${panel}`
-                  )}
+                  {t(`accounts.${panel}`)}
                 </DropdownMenuItem>
               ))}
               {canManage && (
@@ -691,7 +689,7 @@ function AccountsContent() {
               <>
                 <Table
                   aria-label={tr('title')}
-                  className='hidden min-w-[1280px] xl:table'
+                  className='hidden min-w-[70rem] xl:table'
                 >
                   <TableHeader>
                     {table.getHeaderGroups().map((group) => (
@@ -718,21 +716,29 @@ function AccountsContent() {
                   </TableHeader>
                   <TableBody>
                     {table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id}>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell
-                            key={cell.id}
-                            className={cn(
-                              'py-3 whitespace-nowrap',
-                              pinnedColumnClass(cell.column.id)
-                            )}
-                          >
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableCell>
-                        ))}
+                      <TableRow
+                        key={row.id}
+                        data-state={row.getIsSelected() ? 'selected' : undefined}
+                        className='bg-background hover:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]'
+                      >
+                        {row.getVisibleCells().map((cell) => {
+                          const pinned = pinnedColumnClass(cell.column.id)
+                          return (
+                            <TableCell
+                              key={cell.id}
+                              className={cn(
+                                'py-3 whitespace-nowrap',
+                                pinned && 'bg-inherit',
+                                pinned
+                              )}
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </TableCell>
+                          )
+                        })}
                       </TableRow>
                     ))}
                     {!directory.data?.items.length && (
@@ -749,7 +755,11 @@ function AccountsContent() {
                 </Table>
                 <div className='divide-y xl:hidden'>
                   {table.getRowModel().rows.map((row) => (
-                    <article key={row.id} className='space-y-3 p-4'>
+                    <article
+                      key={row.id}
+                      data-state={row.getIsSelected() ? 'selected' : undefined}
+                      className='space-y-3 p-4 data-[state=selected]:bg-muted'
+                    >
                       <div className='flex items-center justify-between gap-2'>
                         {canManage && (
                           <Checkbox

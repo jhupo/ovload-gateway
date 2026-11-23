@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   orderedQuotaWindows,
   quotaWindowPercent,
+  summaryQuotaWindows,
   type AccountQuotaWindow,
 } from './quota-windows'
 
@@ -43,6 +44,18 @@ describe('account quota windows', () => {
       'model-five-hours',
       'model-weekly',
     ])
+    expect(summaryQuotaWindows(windows).map((quota) => quota.key)).toEqual([
+      'five-hours',
+      'weekly',
+    ])
+  })
+
+  it('uses a single reported window when a five-hour window is unavailable', () => {
+    const weekly = window('weekly', 604_800)
+    const monthly = window('monthly', 2_592_000)
+    expect(summaryQuotaWindows([monthly, weekly])).toEqual([weekly])
+    expect(summaryQuotaWindows([monthly])).toEqual([monthly])
+    expect(summaryQuotaWindows([])).toEqual([])
   })
 
   it('preserves unknown and custom windows instead of inventing a five-hour or weekly limit', () => {

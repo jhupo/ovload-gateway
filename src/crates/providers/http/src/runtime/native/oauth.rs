@@ -360,9 +360,13 @@ impl PublicApiProvider {
         }
         .and_then(Value::as_str)
         .map(str::to_owned);
-        if self.kind.as_str() == "gemini" {
-            token.project = Some(project(&client, &credential.api_key).await?);
-        }
+        let plan_type = if self.kind.as_str() == "gemini" {
+            let binding = project(&client, &credential.api_key).await?;
+            token.project = Some(binding.project_id);
+            binding.plan_type
+        } else {
+            None
+        };
         let prepared = match pending.target() {
             AuthorizationMutationTarget::Create { name } => {
                 PreparedAuthorizationCredential::Create(Box::new(create(
@@ -370,6 +374,7 @@ impl PublicApiProvider {
                     name,
                     credential,
                     pending.outbound_proxy().cloned(),
+                    plan_type,
                 )?))
             }
             AuthorizationMutationTarget::Reauthorize { account_id } => {
@@ -382,6 +387,7 @@ impl PublicApiProvider {
                     &account,
                     credential,
                     Box::new(NoopGuard),
+                    plan_type,
                 )?))
             }
         };
@@ -397,7 +403,7 @@ impl PublicApiProvider {
             return Err(failure(ProviderAdminErrorKind::Conflict));
         }
         let (credential, guard) = self.refresh_tokens(&account).await?;
-        rotation(self, &account, credential, Box::new(guard))
+        rotation(self, &account, credential, Box::new(guard), None)
     }
     async fn refresh_tokens(
         &self,
@@ -656,6 +662,7 @@ fn create(
     name: &str,
     credential: Credential,
     proxy: Option<OutboundProxy>,
+    plan_type: Option<&str>,
 ) -> Result<PreparedCredentialCreate, ProviderAdminError> {
     let token = credential.oauth.as_ref().ok_or_else(invalid)?;
     Ok(PreparedCredentialCreate {
@@ -668,7 +675,7 @@ fn create(
         email: token.email.clone(),
         upstream_user_id: Some(token.subject.clone()),
         upstream_account_id: Some(token.subject.clone()),
-        plan_type: None,
+        plan_type: plan_type.map(str::to_owned),
         authentication_kind: "oauth".into(),
         provider_material: credential.document()?,
         has_refresh_token: true,
@@ -684,6 +691,7 @@ fn rotation(
     account: &ProviderAccount,
     credential: Credential,
     guard: Box<dyn CredentialCommitGuard>,
+    plan_type: Option<&str>,
 ) -> Result<PreparedCredentialRotation, ProviderAdminError> {
     let token = credential.oauth.as_ref().ok_or_else(invalid)?;
     Ok(PreparedCredentialRotation::new(
@@ -695,8 +703,8 @@ fn rotation(
             replacement_identity: None,
             name: account.name().into(),
             email: account.email().map(str::to_owned),
-            plan_type: account.plan_type().map(str::to_owned),
-            preserve_profile: true,
+            plan_type: plan_type.or_else(|| account.plan_type()).map(str::to_owned),
+            preserve_profile: plan_type.is_none(),
             preserve_credential_state: false,
             provider_material: credential.document()?,
             has_refresh_token: true,
@@ -706,7 +714,30 @@ fn rotation(
         guard,
     ))
 }
-async fn project(client: &reqwest::Client, access: &str) -> Result<String, ProviderAdminError> {
+struct GeminiProjectBinding {
+    project_id: String,
+    plan_type: Option<&'static str>,
+}
+
+fn gemini_plan_type(value: &Value) -> Option<&'static str> {
+    let tier = value
+        .pointer("/paidTier/id")
+        .and_then(Value::as_str)
+        .or_else(|| value.pointer("/currentTier/id").and_then(Value::as_str))?;
+    match tier {
+        "free-tier" => Some("free"),
+        "g1-pro-tier" => Some("pro"),
+        "g1-ultra-tier" => Some("ultra"),
+        "standard-tier" | "gcp-standard-tier" => Some("standard"),
+        "gcp-enterprise-tier" => Some("enterprise"),
+        _ => None,
+    }
+}
+
+async fn project(
+    client: &reqwest::Client,
+    access: &str,
+) -> Result<GeminiProjectBinding, ProviderAdminError> {
     // Keep this request aligned with Antigravity CLI's Code Assist setup flow. The
     // project hint is optional for the managed free tier, but must be sent to
     // both calls when an account is configured with a user-owned project.
@@ -745,7 +776,7 @@ async fn project_at(
     endpoint: &str,
     fallback_endpoint: Option<&str>,
     projects_url: &str,
-) -> Result<String, ProviderAdminError> {
+) -> Result<GeminiProjectBinding, ProviderAdminError> {
     let mut load = json!({"metadata":{"ideType":"ANTIGRAVITY"}});
     if let Some(project) = project_hint {
         load["cloudaicompanionProject"] = json!(project);
@@ -770,14 +801,20 @@ async fn project_at(
         ),
         Err((error, _)) => return Err(error),
     };
+    let binding = |project_id| GeminiProjectBinding {
+        project_id,
+        plan_type: gemini_plan_type(&value),
+    };
     if let Some(project) = project_id(&value) {
-        return Ok(project);
+        return Ok(binding(project));
     }
     if value.get("currentTier").is_some_and(|tier| !tier.is_null()) {
         if let Some(project) = project_hint {
-            return Ok(project.to_owned());
+            return Ok(binding(project.to_owned()));
         }
-        return discover_project(client, access, &load, endpoint, projects_url).await;
+        return discover_project(client, access, &load, endpoint, projects_url)
+            .await
+            .map(binding);
     }
     let tier = value
         .get("allowedTiers")
@@ -825,12 +862,14 @@ async fn project_at(
                 return Err(Stage::Poll.failure("gemini", "operation_failed", None));
             }
             if let Some(project) = project_id(response.get("response").unwrap_or(&response)) {
-                return Ok(project);
+                return Ok(binding(project));
             }
             if let Some(project) = project_hint {
-                return Ok(project.to_owned());
+                return Ok(binding(project.to_owned()));
             }
-            return discover_project(client, access, &load, endpoint, projects_url).await;
+            return discover_project(client, access, &load, endpoint, projects_url)
+                .await
+                .map(binding);
         }
         let operation = response
             .get("name")
@@ -995,7 +1034,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(result, "managed-project");
+        assert_eq!(result.project_id, "managed-project");
         let requests = server.received_requests().await.unwrap();
         assert!(requests.iter().all(|request| {
             !request.headers.contains_key("client-metadata")
@@ -1031,7 +1070,7 @@ mod tests {
             )
             .await;
             if expect_fallback {
-                assert_eq!(result.unwrap(), "managed-project");
+                assert_eq!(result.unwrap().project_id, "managed-project");
             } else {
                 assert!(result.is_err());
             }
@@ -1044,7 +1083,9 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v1internal:loadCodeAssist"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-                "currentTier":{"id":"free-tier"},"cloudaicompanionProject":"existing-project"
+                "currentTier":{"id":"free-tier"},
+                "paidTier":{"id":"g1-pro-tier"},
+                "cloudaicompanionProject":"existing-project"
             })))
             .expect(1)
             .mount(&server)
@@ -1059,7 +1100,8 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(result, "existing-project");
+        assert_eq!(result.project_id, "existing-project");
+        assert_eq!(result.plan_type, Some("pro"));
         assert_eq!(server.received_requests().await.unwrap().len(), 1);
     }
 
@@ -1099,7 +1141,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(result, "new-managed-project");
+        assert_eq!(result.project_id, "new-managed-project");
     }
 
     #[tokio::test]
@@ -1137,7 +1179,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(result, "cloud-ai-companion-fixture");
+        assert_eq!(result.project_id, "cloud-ai-companion-fixture");
     }
     #[test]
     fn callback_is_bound_to_expected_destination_and_state() {

@@ -10,7 +10,7 @@
   "groups": "Groups",
   "capacity": "Concurrency",
   "tokens": "Tokens",
-  "lastUsed": "Last Used (UTC)",
+  "lastUsed": "Last used",
   "expires": "Expires (UTC)",
   "actions": "Actions",
   "details": "Details",

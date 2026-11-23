@@ -73,6 +73,7 @@ export function GroupRouting({
         <Label htmlFor='group-live'>{t('groups.live')}</Label>
         <SwitchLabeled
           id='group-live'
+          containedMotion
           checked={live}
           onCheckedChange={onLiveChange}
         />
@@ -81,6 +82,7 @@ export function GroupRouting({
         <Label htmlFor='group-images'>{tr('images')}</Label>
         <SwitchLabeled
           id='group-images'
+          containedMotion
           checked={images}
           onCheckedChange={onImagesChange}
         />

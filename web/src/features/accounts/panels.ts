@@ -14,6 +14,5 @@ export function accountPanels(account: UpstreamAccount): AccountPanel[] {
       ? ['forecast' as const]
       : []),
     ...(oauth && account.capabilities.resetCredits ? ['reset' as const] : []),
-    ...(oauth && account.provider === 'openai' ? [] : ['models' as const]),
   ]
 }

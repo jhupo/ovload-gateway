@@ -58,10 +58,17 @@ const out = '/src/test-results/table-consistency';
     await page.getByRole('button', { name: '添加代理', exact: true }).click();
     let dialog = page.getByRole('dialog').last();
     await expect(dialog.locator('#proxy-auto-location')).toHaveCount(0);
+    await expect(dialog.locator('#proxy-url')).toHaveAttribute('type', 'password');
+    await expect(dialog.getByRole('button', { name: /显示.*地址|隐藏.*地址/ })).toHaveCount(0);
+    await dialog.evaluate(async el => { await Promise.all(el.getAnimations().map(a => a.finished.catch(() => {}))); });
     const single = await dialog.boundingBox();
     await dialog.getByRole('tab', { name: '批量', exact: true }).click();
+    await expect(dialog.getByRole('tabpanel', { name: '批量', exact: true })).toBeVisible();
     const batch = await dialog.boundingBox();
-    assert.deepEqual(batch, single, 'single/batch dialog geometry must remain fixed');
+    assert(Math.abs(batch.width - single.width) <= 1, 'single/batch dialog width must remain fixed');
+    const batchCount = await dialog.locator('#proxy-batch-count').boundingBox();
+    const batchAction = await dialog.getByRole('button', { name: '批量添加', exact: true }).boundingBox();
+    assert(batchAction.y - batchCount.y - batchCount.height <= 32, 'batch footer should remain close to the form');
     await page.screenshot({ path: out + '/proxy-batch-desktop.png' });
     await dialog.getByRole('tab', { name: '单条', exact: true }).click();
     await dialog.evaluate(async el => { await Promise.all(el.getAnimations({subtree:true}).map(a => a.finished.catch(() => {}))); });
@@ -87,7 +94,7 @@ const out = '/src/test-results/table-consistency';
     await dialog.getByRole('tab', { name: '批量', exact: true }).click(); await dialog.locator('#proxy-batch').fill('http://192.0.2.241:8080\nsocks5h://192.0.2.242:1080');
     await dialog.getByRole('button', { name: '批量添加', exact: true }).click(); await expect(page.getByRole('dialog')).toHaveCount(0);
     assert(payloads[1].every(item => item.autoLocation === true));
-    checks.push('stable single/batch geometry; position detection always requested; automatic location in single/batch writes (controlled responses)');
+    checks.push('consistent editor width and compact batch spacing; position detection always requested; automatic location in proxy writes');
     await page.getByRole('button', { name: /查看 .* 的关联账号/ }).first().click();
     await page.getByRole('dialog').last().getByRole('button', { name: '分配账号', exact: true }).click();
     dialog = page.getByRole('dialog').last();
@@ -101,7 +108,7 @@ const out = '/src/test-results/table-consistency';
     await page.screenshot({ path: out + '/proxy-assign-desktop.png' });
     await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
     checks.push('assign action beside search, no duplicate footer action');
-    // Mobile route checks and both editor tabs, including custom-location scrolling.
+    // Mobile route checks and both editor tabs.
     for (const width of [390, 320]) {
       await page.setViewportSize({ width, height: 844 });
       for (const path of ['/groups','/accounts','/announcements','/proxies']) {
@@ -111,16 +118,19 @@ const out = '/src/test-results/table-consistency';
       await page.getByRole('button', { name: '添加代理', exact: true }).click(); dialog = page.getByRole('dialog').last();
       await dialog.evaluate(async el => { await Promise.all(el.getAnimations().map(a => a.finished.catch(() => {}))); });
       const rect = await dialog.boundingBox();
-      await dialog.getByRole('tab', { name: '批量', exact: true }).click(); assert.deepEqual(await dialog.boundingBox(), rect);
-      await dialog.getByRole('tab', { name: '单条', exact: true }).click(); await dialog.locator('#proxy-custom-location').click();
-      assert.deepEqual(await dialog.boundingBox(), rect);
-      await dialog.locator('#proxy-timezone').scrollIntoViewIfNeeded();
+      await dialog.getByRole('tab', { name: '批量', exact: true }).click();
+      assert(Math.abs((await dialog.boundingBox()).width - rect.width) <= 1);
+      await expect(dialog.locator('#proxy-batch')).toBeInViewport();
+      await expect(dialog.getByRole('button', { name: '批量添加', exact: true })).toBeInViewport();
+      await dialog.getByRole('tab', { name: '单条', exact: true }).click();
+      await expect(dialog.locator('#proxy-url')).toBeInViewport();
       await expect(dialog.getByRole('button', { name: '保存代理', exact: true })).toBeInViewport();
       assert(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1));
-      await page.screenshot({ path: out + '/proxy-custom-mobile-' + width + '.png' });
-      await page.keyboard.press('Escape'); await page.getByRole('alertdialog').getByRole('button', { name: '放弃修改', exact: true }).click();
+      await page.screenshot({ path: out + '/proxy-single-mobile-' + width + '.png' });
+      await page.keyboard.press('Escape');
+      await expect(dialog).toHaveCount(0);
     }
-    assert.deepEqual(errors, []); checks.push('390px/320px: no page overflow, stable dialog, reachable fields/footer, no page exceptions');
+    assert.deepEqual(errors, []); checks.push('390px/320px: no page overflow, consistent dialog width, reachable fields/footer, no page exceptions');
     fs.writeFileSync(out + '/browser.json', JSON.stringify({ passed: true, checks, errors }, null, 2));
     console.log('PASS ' + checks.join('; '));
   } catch (e) {

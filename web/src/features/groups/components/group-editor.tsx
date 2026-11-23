@@ -286,7 +286,7 @@ export function GroupEditor({
                     {...aria('description')}
                   />
                 </div>
-                <div className='grid grid-cols-2 gap-4'>
+                <div className='grid grid-cols-2 items-end gap-4 sm:grid-cols-3'>
                   <div className='space-y-2'>
                     <Label htmlFor='group-rate'>{t('groups.multiplier')}</Label>
                     <Input
@@ -311,7 +311,7 @@ export function GroupEditor({
                       {...aria('rpm')}
                     />
                   </div>
-                  <div className='space-y-2'>
+                  <div className='col-span-2 space-y-2 sm:col-span-1'>
                     <Label htmlFor='group-type'>{t('groups.type')}</Label>
                     <Select
                       value={visibility}

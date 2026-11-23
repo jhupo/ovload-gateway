@@ -20,7 +20,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { TokenCount } from '@/components/token-count'
-import { orderedQuotaWindows, quotaWindowPercent } from './quota-windows'
+import {
+  FIVE_HOUR_WINDOW_SECONDS,
+  WEEKLY_WINDOW_SECONDS,
+  orderedQuotaWindows,
+  quotaWindowPercent,
+  summaryQuotaWindows,
+} from './quota-windows'
 
 export function AccountIdentity({ account }: { account: UpstreamAccount }) {
   return (
@@ -120,8 +126,8 @@ const quotaTextTone = {
 }
 
 const quotaDurationBadges: Record<number, string> = {
-  18_000: '5H',
-  604_800: '7D',
+  [FIVE_HOUR_WINDOW_SECONDS]: '5H',
+  [WEEKLY_WINDOW_SECONDS]: '7D',
 }
 
 export function QuotaWindows({
@@ -253,7 +259,7 @@ export function AccountQuotaCell({
 
   useEffect(() => () => clearTimeout(closeTimer.current), [])
 
-  const windows = orderedQuotaWindows(account.quota.windows)
+  const windows = summaryQuotaWindows(account.quota.windows)
   if (account.authenticationKind !== 'oauth' || !windows.length) {
     return (
       <div className='flex min-h-10 items-center justify-between gap-2'>

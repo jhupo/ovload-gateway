@@ -46,13 +46,31 @@ test('renders both real quota percentages and reset times in the usage detail', 
   expect(progress[1].getAttribute('aria-label')).toContain('周额度')
 })
 
-test('opens both reported quota windows from the table summary', async () => {
+test('keeps extra reported quota windows in the table summary popover', async () => {
   const screen = await render(
-    <AccountQuotaCell account={{ quota, authenticationKind: 'oauth' }} />
+    <AccountQuotaCell
+      account={{
+        authenticationKind: 'oauth',
+        quota: {
+          ...quota,
+          windows: [
+            ...quota.windows,
+            {
+              key: 'monthly',
+              windowSeconds: 2_592_000,
+              labelDisplay: '月额度',
+              usedPercent: 18,
+              resetAtDisplay: '2026-12-21 22:39:39',
+            },
+          ],
+        },
+      }}
+    />
   )
   const summary = screen.getByRole('button', { name: /shared quota/i })
   await expect.element(screen.getByText('100%', { exact: true })).toBeVisible()
   await expect.element(summary).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.container.querySelectorAll('[role=progressbar]')).toHaveLength(2)
 
   await userEvent.click(summary)
 
@@ -66,6 +84,9 @@ test('opens both reported quota windows from the table summary', async () => {
   await expect
     .element(details.getByRole('progressbar', { name: /周额度/ }))
     .toHaveAttribute('aria-valuenow', '31')
+  await expect
+    .element(details.getByRole('progressbar', { name: /月额度/ }))
+    .toHaveAttribute('aria-valuenow', '18')
   await expect
     .element(details.getByText('2026-11-19 01:31:36'))
     .toBeVisible()

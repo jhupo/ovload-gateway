@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import { ProxyDialog } from './components'
@@ -174,21 +174,79 @@ export function ProxyEditor({
     e.preventDefault()
     if (!busy) mutation.mutate()
   }
+  const canRevealUrl = record?.hasAuthentication === true
+  const maskUrl = !record || (canRevealUrl && !showUrl)
+  const singleFields = (
+    <fieldset disabled={busy} className='space-y-4'>
+      <div className='space-y-2'>
+        <Label htmlFor='proxy-name'>{t('proxyDesign.name')}</Label>
+        <Input
+          id='proxy-name'
+          required
+          value={draft.name}
+          maxLength={160}
+          autoComplete='off'
+          onChange={(e) =>
+            setDraft((old) => ({ ...old, name: e.target.value }))
+          }
+        />
+      </div>
+      <div className='space-y-2'>
+        <Label htmlFor='proxy-url'>{t('proxyDesign.address')}</Label>
+        <p id='proxy-url-help' className='hidden'>
+          {t(
+            canRevealUrl
+              ? 'proxyDesign.keepAuthentication'
+              : 'proxyDesign.addressHelp'
+          )}
+        </p>
+        <div className='flex items-center gap-2'>
+          <Input
+            id='proxy-url'
+            type={maskUrl ? 'password' : 'text'}
+            className='[&::-ms-reveal]:hidden'
+            aria-describedby='proxy-url-help'
+            required={!record}
+            autoComplete='new-password'
+            spellCheck={false}
+            maxLength={2048}
+            placeholder={record?.endpoint ?? 'http://host:8080'}
+            value={draft.url}
+            onChange={(e) =>
+              setDraft((old) => ({ ...old, url: e.target.value }))
+            }
+          />
+          {canRevealUrl && (
+            <Button
+              type='button'
+              size='icon'
+              variant='ghost'
+              aria-label={t(
+                showUrl ? 'proxyDesign.hideAddress' : 'proxyDesign.showAddress'
+              )}
+              onClick={() => setShowUrl((visible) => !visible)}
+            >
+              {showUrl ? <EyeOff /> : <Eye />}
+            </Button>
+          )}
+        </div>
+      </div>
+    </fieldset>
+  )
   return (
     <>
       <ProxyDialog
         title={t(item ? 'proxies.edit' : 'proxies.add')}
-                busy={busy}
-        compact={tab === 'single'}
-        fixedHeight={tab === 'batch'}
+        busy={busy}
+        compact
         onClose={close}
         restoreFocus={restoreFocus}
       >
         <form onSubmit={submit} className='flex min-h-0 flex-1 flex-col gap-4'>
-          <div className='min-h-0 flex-1 space-y-4 overflow-y-auto p-1'>
-            {!item && (
-              <Tabs value={tab} onValueChange={setTab}>
-                <TabsList className='w-full'>
+          <div className='min-h-0 flex-1 overflow-y-auto p-1'>
+            {item ? singleFields : (
+              <Tabs value={tab} onValueChange={setTab} className='gap-4'>
+                <TabsList className='w-full' aria-label={t('proxies.add')}>
                   <TabsTrigger disabled={busy} value='single'>
                     {t('proxyDesign.single')}
                   </TabsTrigger>
@@ -196,95 +254,46 @@ export function ProxyEditor({
                     {t('proxyDesign.batch')}
                   </TabsTrigger>
                 </TabsList>
+                <TabsContent
+                  value='single'
+                  className='focus-visible:ring-2 focus-visible:ring-ring'
+                >
+                  {singleFields}
+                </TabsContent>
+                <TabsContent
+                  value='batch'
+                  className='focus-visible:ring-2 focus-visible:ring-ring'
+                >
+                  <fieldset disabled={busy} className='space-y-2'>
+                    <Label htmlFor='proxy-batch'>{t('proxies.urls')}</Label>
+                    <Textarea
+                      id='proxy-batch'
+                      className='field-sizing-fixed resize-y'
+                      value={text}
+                      onChange={(e) => setText(e.target.value)}
+                      autoComplete='off'
+                      spellCheck={false}
+                      maxLength={64000}
+                      rows={3}
+                      placeholder='http://user:password@host:8080'
+                      aria-describedby='proxy-batch-count'
+                    />
+                    <div
+                      id='proxy-batch-count'
+                      className='flex flex-wrap justify-between gap-2 text-sm text-muted-foreground'
+                    >
+                      <span>{t('proxies.importLimit')}</span>
+                      <span>
+                        {t('proxies.importCount', {
+                          valid: parsed.inputs.length,
+                          invalid: parsed.invalidLine === null ? 0 : 1,
+                        })}
+                      </span>
+                    </div>
+                  </fieldset>
+                </TabsContent>
               </Tabs>
             )}
-            <fieldset disabled={busy} className='space-y-4'>
-              {tab === 'batch' ? (
-                <div className='space-y-3'>
-                  <Label htmlFor='proxy-batch'>{t('proxies.urls')}</Label>
-                  <Textarea
-                    id='proxy-batch'
-                    className='min-h-40'
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    autoComplete='off'
-                    spellCheck={false}
-                    maxLength={64000}
-                    rows={8}
-                    placeholder='http://user:password@host:8080'
-                  />
-                  <div className='flex flex-wrap justify-between gap-2 text-sm text-muted-foreground'>
-                    <span>{t('proxies.importLimit')}</span>
-                    <span>
-                      {t('proxies.importCount', {
-                        valid: parsed.inputs.length,
-                        invalid: parsed.invalidLine === null ? 0 : 1,
-                      })}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className='space-y-2'>
-                    <Label htmlFor='proxy-name'>{t('proxyDesign.name')}</Label>
-                    <Input
-                      id='proxy-name'
-                      required
-                      value={draft.name}
-                      maxLength={160}
-                      autoComplete='off'
-                      onChange={(e) =>
-                        setDraft((old) => ({ ...old, name: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className='space-y-2'>
-                    <Label htmlFor='proxy-url'>
-                      {t('proxyDesign.address')}
-                    </Label>
-                    <p
-                      id='proxy-url-help'
-                      className='hidden'
-                    >
-                      {t(
-                        record?.hasAuthentication
-                          ? 'proxyDesign.keepAuthentication'
-                          : 'proxyDesign.addressHelp'
-                      )}
-                    </p>
-                    <div className='flex items-center gap-2'>
-                      <Input
-                        id='proxy-url'
-                        type={record?.hasAuthentication && !showUrl ? 'password' : 'text'}
-                        aria-describedby='proxy-url-help'
-                        required={!record}
-                        autoComplete='new-password'
-                        spellCheck={false}
-                        maxLength={2048}
-                        placeholder={record?.endpoint ?? 'http://host:8080'}
-                        value={draft.url}
-                        onChange={(e) =>
-                          setDraft((old) => ({ ...old, url: e.target.value }))
-                        }
-                      />
-                      <Button
-                        type='button'
-                        size='icon'
-                        variant='ghost'
-                        aria-label={t(
-                          showUrl
-                            ? 'proxyDesign.hideAddress'
-                            : 'proxyDesign.showAddress'
-                        )}
-                        onClick={() => setShowUrl(!showUrl)}
-                      >
-                        {showUrl ? <EyeOff /> : <Eye />}
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </fieldset>
           </div>
           <div className='flex shrink-0 flex-wrap justify-end gap-2'>
             <Button
