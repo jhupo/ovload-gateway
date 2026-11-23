@@ -46,10 +46,14 @@ pub(crate) const COOKIE: &str =
 pub(crate) fn csrf() -> String {
     ovload_admin::IdentityService::csrf_token(TOKEN).expect("fixture token is canonical")
 }
+pub(super) fn principal_id() -> ManagementPrincipalId {
+    ManagementPrincipalId::new(Uuid::from_u128(1))
+}
+
 pub(super) fn session() -> IdentitySession {
     IdentitySession {
         id: AccessSessionId::new(Uuid::from_u128(2)),
-        owner: IdentityOwner::Management(ManagementPrincipalId::new(Uuid::from_u128(1))),
+        owner: IdentityOwner::Management(principal_id()),
         authority_generation: 1,
         expires_at: Utc::now() + Duration::hours(1),
     }

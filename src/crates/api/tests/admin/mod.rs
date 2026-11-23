@@ -277,21 +277,6 @@ impl AdminTestFixture {
         )
         .await
         .expect("initialize test admin services");
-        plugin_ports
-            .management_authority
-            .lock()
-            .expect("management authority")
-            .credential = Some(ovload_admin::model::identity_access::IdentityCredential {
-            owner: identity_authority::session().owner,
-            authority_generation: 1,
-            password_hash: secrecy::SecretString::from(
-                auth.password_hash
-                    .lock()
-                    .expect("password hash")
-                    .clone()
-                    .expect("initialized hash"),
-            ),
-        });
         Self {
             services: bundle.services(),
             plugin_ports,

@@ -1174,7 +1174,6 @@ fn plan_with_profiles(
         .with_upstream_feature_validation();
     let directory = Arc::new(RuntimeAccountDirectory::new(
         [
-            "acct_failed",
             "acct_first",
             "acct_image",
             "acct_observation_mismatch",
@@ -3896,22 +3895,27 @@ fn bare_atomic_response_failed_should_rotate_before_the_first_delivery() {
 #[test]
 fn exhausted_atomic_response_failed_should_deliver_only_the_last_failure_once() {
     let operation = generate_operation();
-    let route_plan = plan(&operation);
-    let scripts = (1..=route_plan.max_attempts().get())
-        .map(|attempt| {
+    let route_plan = plan_with_policy(
+        &operation,
+        AccountSelectionPolicy::new(RotationStrategy::Smart, NonZeroU32::new(2).unwrap())
+            .with_max_account_rotations(ovload_core::account::MAX_ACCOUNT_ROTATIONS),
+    );
+    let expected_attempts = route_plan.max_attempts().get();
+    let scripts = (1..=expected_attempts)
+        .zip(ROTATION_TEST_ACCOUNTS)
+        .map(|(attempt, account_id)| {
             let response_id = format!("response-attempt-{attempt}-failed");
-            let marker = if attempt == route_plan.max_attempts().get() {
+            let marker = if attempt == expected_attempts {
                 "last upstream failure".to_owned()
             } else {
                 format!("discarded failure {attempt}")
             };
             Script::ObservedStream {
-                account_id: "acct_failed",
+                account_id,
                 items: vec![Err(atomic_response_failed(&response_id, &marker))],
             }
         })
         .collect::<Vec<_>>();
-    let expected_attempts = route_plan.max_attempts().get();
     let expected_last_response = format!("response-attempt-{expected_attempts}-failed");
     let (coordinator, store, provider) = coordinator(scripts);
     let mut session = block_on(

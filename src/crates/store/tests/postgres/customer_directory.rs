@@ -67,7 +67,7 @@ async fn customer(
                 tenant_id: Uuid::now_v7().into(),
                 user_id: Uuid::now_v7().into(),
                 slug: format!("directory-{}", Uuid::now_v7().simple()),
-                email: format!("{name}@fixture.example"),
+                email: format!("{}@fixture.example", name.to_ascii_lowercase()),
                 display_name: name.into(),
                 password_hash: "$argon2id$synthetic-directory-original".into(),
                 max_concurrency: 7,

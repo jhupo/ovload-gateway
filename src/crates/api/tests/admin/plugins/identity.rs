@@ -6,7 +6,7 @@ use ovload_admin::{
         identity::CustomerUserRecord,
         identity_access::{
             CustomerDirectoryQuery, CustomerIdentityPage, IdentityAudience, IdentityCredential,
-            IdentityManagementActor, IdentityOwner, IdentityResult, IdentitySession,
+            IdentityError, IdentityManagementActor, IdentityOwner, IdentityResult, IdentitySession,
             NewCustomerIdentity, NewIdentitySession, SetCustomerActive,
         },
     },
@@ -21,9 +21,22 @@ impl IdentityStore for super::TestPluginPorts {
     async fn bootstrap_owner(
         &self,
         _: &str,
-        _: SecretString,
+        password_hash: SecretString,
     ) -> IdentityResult<ManagementPrincipalId> {
-        Err(ovload_admin::model::identity_access::IdentityError::Unavailable)
+        let mut state = self
+            .management_authority
+            .lock()
+            .expect("management authority");
+        if state.credential.is_some() {
+            return Err(IdentityError::Conflict);
+        }
+        let principal = super::super::identity_authority::principal_id();
+        state.credential = Some(IdentityCredential {
+            owner: IdentityOwner::Management(principal),
+            authority_generation: 1,
+            password_hash,
+        });
+        Ok(principal)
     }
     async fn consume_auth_attempt(&self, _: IpAddr, _: [u8; 32]) -> IdentityResult<()> {
         Ok(())
@@ -47,7 +60,6 @@ impl IdentityStore for super::TestPluginPorts {
         Ok(())
     }
     async fn create_session(&self, command: NewIdentitySession) -> IdentityResult<()> {
-        use ovload_admin::model::identity_access::IdentityError;
         let mut state = self
             .management_authority
             .lock()
@@ -63,9 +75,6 @@ impl IdentityStore for super::TestPluginPorts {
         }
         if let Some(previous) = command.previous_session {
             state.sessions.remove(&previous);
-        }
-        if state.sessions.len() >= 10 {
-            return Err(IdentityError::RateLimited);
         }
         state.sessions.insert(command.session.id, command);
         Ok(())
@@ -97,7 +106,6 @@ impl IdentityStore for super::TestPluginPorts {
             .map(|s| s.session.clone()))
     }
     async fn revoke_session(&self, current: &IdentitySession) -> IdentityResult<()> {
-        use ovload_admin::model::identity_access::IdentityError;
         let mut state = self
             .management_authority
             .lock()
