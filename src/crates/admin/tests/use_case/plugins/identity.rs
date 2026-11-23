@@ -23,7 +23,7 @@ impl IdentityStore for super::TestPluginPorts {
         _: &str,
         _: SecretString,
     ) -> IdentityResult<ManagementPrincipalId> {
-        Err(ovload_admin::model::identity_access::IdentityError::Unavailable)
+        Err(ovload_admin::model::identity_access::IdentityError::Conflict)
     }
     async fn consume_auth_attempt(&self, _: IpAddr, _: [u8; 32]) -> IdentityResult<()> {
         Err(ovload_admin::model::identity_access::IdentityError::Unavailable)
