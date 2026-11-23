@@ -60,14 +60,6 @@ pub(super) fn headers(kind: &str, credential: &Credential) -> Result<HeaderMap, 
     if credential.oauth.is_some() {
         profile::apply(kind, None, &mut headers)?;
     }
-    if kind == "gemini" && credential.oauth.is_some() {
-        headers.insert(
-            "client-metadata",
-            HeaderValue::from_static(
-                r#"{"ideType":"ANTIGRAVITY","platform":"LINUX","pluginType":"GEMINI"}"#,
-            ),
-        );
-    }
     Ok(headers)
 }
 

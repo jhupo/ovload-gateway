@@ -1241,8 +1241,10 @@ fn antigravity_probe_failure(code: &str) -> Option<(&str, &'static str)> {
     let message = match code {
         "MODEL_CAPACITY_EXHAUSTED" => "Gemini 上游当前没有该模型的可用容量，请稍后重试或选择其他模型",
         "QUOTA_EXHAUSTED" => "该账号的 Gemini 模型额度已用尽，请查看账号额度或等待重置",
+        "QUOTA_CHECK_FAILED" => "Google 拒绝了本次请求的额度检查，请核对该账号的模型和项目额度",
+        "INSUFFICIENT_G1_CREDITS_BALANCE" => "Google 返回 AI 积分余额不足，请检查该账号的积分余额",
         "RATE_LIMIT_EXCEEDED" => "Gemini 上游请求过于频繁，请降低请求频率后重试",
-        "RESOURCE_EXHAUSTED" => "Gemini 上游暂时拒绝了请求，请查看账号额度或稍后重试",
+        "RESOURCE_EXHAUSTED" => "Google 返回 RESOURCE_EXHAUSTED，未提供具体的限流或额度原因",
         "UPSTREAM_UNAVAILABLE" => "Gemini 上游服务暂不可用，请稍后重试",
         _ => return None,
     };

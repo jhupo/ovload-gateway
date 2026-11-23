@@ -252,6 +252,10 @@ pub(in super::super) fn encode(
         }
     }
     if gemini && let Some(tokens) = &credential.oauth {
+        native["sessionId"] = json!(uuid::Uuid::now_v7().to_string());
+        if native.get("generationConfig").is_none() {
+            native["generationConfig"] = json!({});
+        }
         native = json!({
             "project": tokens.project.as_ref().ok_or_else(invalid)?,
             "model": body.get("model").ok_or_else(invalid)?,

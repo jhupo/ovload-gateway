@@ -41,12 +41,7 @@ fn api_keys_never_receive_subscription_identity_or_bearer_headers() {
         assert_eq!(headers["authorization"], "Bearer fixture-key");
         assert!(!headers.contains_key(key));
         assert!(headers.contains_key("user-agent"));
-        if kind == "gemini" {
-            assert_eq!(
-                headers["client-metadata"],
-                r#"{"ideType":"ANTIGRAVITY","platform":"LINUX","pluginType":"GEMINI"}"#
-            );
-        }
+        assert!(!headers.contains_key("client-metadata"));
     }
 }
 
@@ -85,7 +80,10 @@ fn native_requests_keep_tools_results_system_and_oauth_project_separate() {
                     .as_str()
                     .is_some_and(|id| id.starts_with("agent-"))
             );
-            assert_eq!(oauth["request"], key);
+            let mut request = oauth["request"].clone();
+            let session = request.as_object_mut().unwrap().remove("sessionId").unwrap();
+            assert!(uuid::Uuid::parse_str(session.as_str().unwrap()).is_ok());
+            assert_eq!(request, key);
         }
         for field in ["service_tier", "reasoning", "text"] {
             let mut invalid = body.clone();
@@ -93,6 +91,14 @@ fn native_requests_keep_tools_results_system_and_oauth_project_separate() {
             assert!(encode(kind, &credential(kind, false), invalid.as_object().unwrap()).is_err());
         }
     }
+}
+
+#[test]
+fn antigravity_includes_generation_config_without_optional_client_parameters() {
+    let input = json!({"model":"fixture-model","input":"fixture prompt"});
+    let body = encode("gemini", &credential("gemini", true), input.as_object().unwrap()).unwrap();
+    assert_eq!(body["request"]["generationConfig"], json!({}));
+    assert!(body["request"]["sessionId"].is_string());
 }
 
 #[test]
