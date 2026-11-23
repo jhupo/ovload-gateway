@@ -718,10 +718,8 @@ async fn project(client: &reqwest::Client, access: &str) -> Result<String, Provi
         client,
         access,
         project_hint.as_deref(),
-        &[
-            "https://cloudcode-pa.googleapis.com/v1internal",
-            "https://daily-cloudcode-pa.googleapis.com/v1internal",
-        ],
+        "https://cloudcode-pa.googleapis.com/v1internal",
+        Some("https://daily-cloudcode-pa.googleapis.com/v1internal"),
         "https://cloudresourcemanager.googleapis.com/v1/projects",
     )
     .await
@@ -740,36 +738,12 @@ fn load_project_request(
         .json(body)
 }
 
-async fn load_project<'a>(
-    client: &reqwest::Client,
-    access: &str,
-    endpoints: &[&'a str],
-    body: &Value,
-) -> Result<(&'a str, Value), ProviderAdminError> {
-    let mut endpoints = endpoints.iter().copied().peekable();
-    while let Some(endpoint) = endpoints.next() {
-        match oauth_http::json_with_endpoint_fallback(
-            load_project_request(client, access, endpoint, body),
-            "gemini",
-            Stage::LoadProject,
-        )
-        .await
-        {
-            Ok(value) => return Ok((endpoint, value)),
-            Err((error, retryable)) if !retryable || endpoints.peek().is_none() => {
-                return Err(error);
-            }
-            Err(_) => {}
-        }
-    }
-    Err(upstream())
-}
-
 async fn project_at(
     client: &reqwest::Client,
     access: &str,
     project_hint: Option<&str>,
-    endpoints: &[&str],
+    endpoint: &str,
+    fallback_endpoint: Option<&str>,
     projects_url: &str,
 ) -> Result<String, ProviderAdminError> {
     let mut load = json!({"metadata":{"ideType":"ANTIGRAVITY"}});
@@ -777,7 +751,25 @@ async fn project_at(
         load["cloudaicompanionProject"] = json!(project);
         load["metadata"]["duetProject"] = json!(project);
     }
-    let (endpoint, value) = load_project(client, access, endpoints, &load).await?;
+    let (endpoint, value) = match oauth_http::json_with_endpoint_fallback(
+        load_project_request(client, access, endpoint, &load),
+        "gemini",
+        Stage::LoadProject,
+    )
+    .await
+    {
+        Ok(value) => (endpoint, value),
+        Err((_, true)) if let Some(fallback) = fallback_endpoint => (
+            fallback,
+            oauth_http::json(
+                load_project_request(client, access, fallback, &load),
+                "gemini",
+                Stage::LoadProject,
+            )
+            .await?,
+        ),
+        Err((error, _)) => return Err(error),
+    };
     if let Some(project) = project_id(&value) {
         return Ok(project);
     }
@@ -997,7 +989,8 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &[&format!("{}/v1internal", server.uri())],
+            &format!("{}/v1internal", server.uri()),
+            None,
             &format!("{}/projects", server.uri()),
         )
         .await
@@ -1032,10 +1025,8 @@ mod tests {
                 &client(None).unwrap(),
                 "fixture-access",
                 None,
-                &[
-                    &format!("{}/primary", server.uri()),
-                    &format!("{}/secondary", server.uri()),
-                ],
+                &format!("{}/primary", server.uri()),
+                Some(&format!("{}/secondary", server.uri())),
                 &format!("{}/projects", server.uri()),
             )
             .await;
@@ -1062,7 +1053,8 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &[&format!("{}/v1internal", server.uri())],
+            &format!("{}/v1internal", server.uri()),
+            None,
             &format!("{}/projects", server.uri()),
         )
         .await
@@ -1101,7 +1093,8 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &[&format!("{}/v1internal", server.uri())],
+            &format!("{}/v1internal", server.uri()),
+            None,
             &format!("{}/projects", server.uri()),
         )
         .await
@@ -1138,7 +1131,8 @@ mod tests {
             &client(None).unwrap(),
             "fixture-access",
             None,
-            &[&format!("{}/v1internal", server.uri())],
+            &format!("{}/v1internal", server.uri()),
+            None,
             &format!("{}/projects", server.uri()),
         )
         .await
