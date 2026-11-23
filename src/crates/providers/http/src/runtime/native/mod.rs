@@ -1,5 +1,6 @@
 //! Native subscription OAuth and API-key transports. OAuth identities never apply to keys.
 
+pub(super) mod antigravity_error;
 pub(super) mod oauth;
 mod oauth_http;
 pub(super) mod profile;

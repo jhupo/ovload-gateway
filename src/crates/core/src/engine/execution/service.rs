@@ -1627,6 +1627,12 @@ impl DefaultExecutionService {
             }
             _ => (AccountProbeErrorSource::Gateway, None, None),
         };
+        let probe_error = AccountProbeError::new(
+            gateway_error_from_engine(error),
+            source,
+            send_state,
+            upstream_response,
+        );
         if let EngineError::Provider(provider_error) = error {
             let latency = started_at.elapsed().unwrap_or_default();
             let latency_ms = u64::try_from(latency.as_millis()).unwrap_or(u64::MAX);
@@ -1637,7 +1643,7 @@ impl DefaultExecutionService {
                 upstream_model = observed.upstream_model.as_str(),
                 failure_kind = provider_error.kind().as_str(),
                 send_state = ?provider_error.send_state(),
-                upstream_status = ?provider_error.upstream_status(),
+                upstream_status = provider_error.upstream_status(),
                 diagnostic_stage = ?provider_error.diagnostic().and_then(|diagnostic| diagnostic.stage()),
                 diagnostic_code = ?provider_error.diagnostic().and_then(|diagnostic| diagnostic.code()),
                 latency_ms,
@@ -1662,13 +1668,12 @@ impl DefaultExecutionService {
                     "账号连接测试观测写入失败，测试结果不受影响"
                 );
             }
+            return probe_error.with_upstream_failure(
+                provider_error.upstream_status(),
+                provider_error.upstream_code().cloned(),
+            );
         }
-        AccountProbeError::new(
-            gateway_error_from_engine(error),
-            source,
-            send_state,
-            upstream_response,
-        )
+        probe_error
     }
 }
 

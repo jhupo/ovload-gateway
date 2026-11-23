@@ -1155,6 +1155,8 @@ impl AccountsService for DefaultAccountsService {
             .connection_test_operation(&upstream_model, &input)
             .await
             .map_err(|error| map_provider_error(error, "provider connection test"))?;
+        let antigravity_oauth = account.provider_kind.as_str() == "gemini"
+            && account.authentication_kind == "oauth";
         let initial = vec![
             AccountConnectionTestEvent::Started {
                 model: model.clone(),
@@ -1192,9 +1194,7 @@ impl AccountsService for DefaultAccountsService {
                     events
                 },
                 Err(error) => {
-                    let upstream_status = error
-                        .upstream_response()
-                        .map(ovload_core::engine::probe::AccountProbeUpstreamResponse::status);
+                    let upstream_status = error.upstream_status();
                     let upstream_content_type = error
                         .upstream_response()
                         .and_then(|response| response.content_type())
@@ -1203,13 +1203,27 @@ impl AccountsService for DefaultAccountsService {
                     let upstream_body = error
                         .upstream_response()
                         .map(|response| String::from_utf8_lossy(response.body()).into_owned());
-                    let message = error.client_message().to_owned();
+                    let antigravity_failure = match (antigravity_oauth, error.upstream_error_code()) {
+                        (true, Some(code)) => antigravity_probe_failure(code),
+                        _ => None,
+                    };
+                    let message = antigravity_failure.map_or_else(
+                        || error.client_message().to_owned(),
+                        |(_, message)| match upstream_status {
+                            Some(status) => format!("{message}（HTTP {status}）"),
+                            None => message.to_owned(),
+                        },
+                    );
+                    let provider_error_code = antigravity_failure
+                        .map(|(code, _)| code)
+                        .or_else(|| error.client_error_code())
+                        .map(ToOwned::to_owned);
                     vec![AccountConnectionTestEvent::Failed {
                         source: error.source(),
                         gateway_error_code: error.kind(),
                         send_state: error.send_state(),
                         message,
-                        provider_error_code: error.client_error_code().map(ToOwned::to_owned),
+                        provider_error_code,
                         provider_error_type: error.client_error_type().map(ToOwned::to_owned),
                         upstream_status,
                         upstream_content_type,
@@ -1221,6 +1235,18 @@ impl AccountsService for DefaultAccountsService {
         .flat_map(futures::stream::iter);
         Ok(Box::pin(futures::stream::iter(initial).chain(terminal)))
     }
+}
+
+fn antigravity_probe_failure(code: &str) -> Option<(&str, &'static str)> {
+    let message = match code {
+        "MODEL_CAPACITY_EXHAUSTED" => "Gemini 上游当前没有该模型的可用容量，请稍后重试或选择其他模型",
+        "QUOTA_EXHAUSTED" => "该账号的 Gemini 模型额度已用尽，请查看账号额度或等待重置",
+        "RATE_LIMIT_EXCEEDED" => "Gemini 上游请求过于频繁，请降低请求频率后重试",
+        "RESOURCE_EXHAUSTED" => "Gemini 上游暂时拒绝了请求，请查看账号额度或稍后重试",
+        "UPSTREAM_UNAVAILABLE" => "Gemini 上游服务暂不可用，请稍后重试",
+        _ => return None,
+    };
+    Some((code, message))
 }
 
 fn map_reset_credits_error_after_refresh(

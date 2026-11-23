@@ -1,7 +1,7 @@
 //! Cold native HTTP execution for one concrete account lease.
 
 use super::{
-    PublicApiProvider, error, metering::NativeMetering, network, outbound,
+    PublicApiProvider, error, metering::NativeMetering, native::antigravity_error, network, outbound,
     scheduler::SelectedAccount,
 };
 use futures::StreamExt;
@@ -53,10 +53,17 @@ pub(super) fn stream(
             context.revalidate_model_key().await?;
             if context.cancellation().is_cancelled() { return Err(error(ProviderErrorKind::Cancelled, UpstreamSendState::NotSent)); }
             send_started.store(true, std::sync::atomic::Ordering::Relaxed);
-            let response = prepared.client.execute(prepared.request).await.map_err(|failure| error(
-                if failure.is_timeout() { ProviderErrorKind::Timeout } else { ProviderErrorKind::Transport },
-                if failure.is_connect() { UpstreamSendState::NotSent } else { UpstreamSendState::Ambiguous },
-            ))?;
+            let antigravity = provider.adapter.is_gemini() && selected.credential.oauth.is_some();
+            let retry_request = if antigravity { prepared.request.try_clone() } else { None };
+            let mut response = send_request(&prepared.client, prepared.request, antigravity).await;
+            if let (Err(failure), Some(request)) = (&response, retry_request)
+                && let Some(delay) = antigravity_retry_delay(failure)
+                && context.deadline().remaining().is_none_or(|remaining| remaining > delay)
+            {
+                tokio::time::sleep(delay).await;
+                context.revalidate_model_key().await?;
+                response = send_request(&prepared.client, request, antigravity).await;
+            }
             Ok((response, prepared.service_tier, metering))
         };
         let (response, requested_service_tier, mut metering) = tokio::select! {
@@ -65,12 +72,13 @@ pub(super) fn stream(
             _ = context.deadline().wait() => Err(error(ProviderErrorKind::Timeout, send_state(&send_started))),
             response = send => response,
         }?;
-        if !response.status().is_success() {
-            let mut failure = network::status_error(response.status());
-            if let Some(delay) = network::retry_after(response.headers()) { failure = failure.with_retry_after(delay); }
-            provider.record_failure(&selected.account, &failure).await;
-            Err(failure)?;
-        }
+        let response = match response {
+            Ok(response) => response,
+            Err(failure) => {
+                provider.record_failure(&selected.account, &failure).await;
+                Err(failure)?
+            }
+        };
         let is_sse = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|value| value.to_str().ok())
             .is_some_and(|value| value.split(';').next().is_some_and(|mime| mime.trim().eq_ignore_ascii_case("text/event-stream")));
         if !is_sse { Err(error(ProviderErrorKind::Protocol, UpstreamSendState::Sent))?; }
@@ -106,6 +114,66 @@ pub(super) fn stream(
         }
     };
     Ok(ProviderStream::new(metadata, events, lease).with_account_feedback(feedback))
+}
+
+async fn send_request(
+    client: &reqwest::Client,
+    request: reqwest::Request,
+    antigravity: bool,
+) -> Result<reqwest::Response, ProviderError> {
+    let response = client.execute(request).await.map_err(|failure| {
+        error(
+            if failure.is_timeout() {
+                ProviderErrorKind::Timeout
+            } else {
+                ProviderErrorKind::Transport
+            },
+            if failure.is_connect() {
+                UpstreamSendState::NotSent
+            } else {
+                UpstreamSendState::Ambiguous
+            },
+        )
+    })?;
+    if response.status().is_success() {
+        return Ok(response);
+    }
+    if antigravity && matches!(response.status().as_u16(), 429 | 503) {
+        return Err(antigravity_error::classify(response).await);
+    }
+    let mut failure = network::status_error(response.status());
+    if let Some(delay) = network::retry_after(response.headers()) {
+        failure = failure.with_retry_after(delay);
+    }
+    Err(failure)
+}
+
+fn antigravity_retry_delay(failure: &ProviderError) -> Option<Duration> {
+    if !antigravity_error::is_model_capacity(failure) {
+        return None;
+    }
+    let delay = failure.retry_after().unwrap_or(Duration::from_secs(1));
+    (delay <= Duration::from_secs(3)).then_some(delay.max(Duration::from_secs(1)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ovload_core::error::OpaqueUpstreamValue;
+
+    #[test]
+    fn antigravity_retries_only_explicit_capacity_with_short_delay() {
+        let capacity = error(
+            ProviderErrorKind::UpstreamCapacityUnavailable,
+            UpstreamSendState::Sent,
+        )
+        .with_upstream_code(OpaqueUpstreamValue::new("MODEL_CAPACITY_EXHAUSTED"));
+        assert_eq!(antigravity_retry_delay(&capacity), Some(Duration::from_secs(1)));
+        let deferred = capacity.with_retry_after(Duration::from_secs(4));
+        assert_eq!(antigravity_retry_delay(&deferred), None);
+        let quota = error(ProviderErrorKind::QuotaExhausted, UpstreamSendState::Sent);
+        assert_eq!(antigravity_retry_delay(&quota), None);
+    }
 }
 
 fn send_state(started: &std::sync::atomic::AtomicBool) -> UpstreamSendState {

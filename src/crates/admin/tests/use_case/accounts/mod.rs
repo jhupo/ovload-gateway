@@ -25,7 +25,7 @@ use ovload_core::{
     error::{ClientVisibleUpstreamError, GatewayError, GatewayErrorKind},
     operation::{GenerateRequest, Operation, ProtocolPayload},
     routing::ProviderKind,
-    upstream::UpstreamSendState,
+    upstream::{OpaqueUpstreamValue, UpstreamSendState},
 };
 
 use ovload_admin::{
@@ -1428,6 +1428,41 @@ async fn connection_test_rate_limited_probe_returns_provider_failure() {
             ..
         })
         if message == "xAI free model quota is exhausted"
+    ));
+}
+
+#[tokio::test]
+async fn connection_test_gemini_capacity_failure_shows_reason_without_upstream_body() {
+    let events = events();
+    let services = accounts_service_with_probe(
+        FakeProviderAdmin::new("gemini", events.clone()),
+        FakeAccountStore::new("gemini", events),
+        Arc::new(AntigravityCapacityProbe),
+    )
+    .await;
+    let events = services
+        .accounts()
+        .test_connection(
+            ProviderAccountId::new("acct_test").expect("account ID"),
+            ovload_core::routing::UpstreamModelId::new("gemini-test").expect("model"),
+        )
+        .await
+        .expect("connection test stream")
+        .collect::<Vec<_>>()
+        .await;
+
+    assert!(matches!(
+        events.last(),
+        Some(AccountConnectionTestEvent::Failed {
+            source: AccountProbeErrorSource::Upstream,
+            message,
+            provider_error_code: Some(code),
+            upstream_status: Some(429),
+            upstream_content_type: None,
+            upstream_body: None,
+            ..
+        }) if message.contains("模型的可用容量") && message.contains("HTTP 429")
+            && code == "MODEL_CAPACITY_EXHAUSTED"
     ));
 }
 
@@ -3718,6 +3753,29 @@ impl AccountProbe for FreeModelQuotaProbe {
                 AccountProbeErrorSource::Provider,
                 Some(UpstreamSendState::NotSent),
                 None,
+            ))
+        })
+    }
+}
+
+struct AntigravityCapacityProbe;
+
+impl AccountProbe for AntigravityCapacityProbe {
+    fn probe(
+        &self,
+        _: AccountProbeRequest,
+        _: Option<Arc<ovload_core::routing::RuntimeSnapshot>>,
+    ) -> BoxFuture<'_, Result<AccountProbeResult, AccountProbeError>> {
+        Box::pin(async {
+            Err(AccountProbeError::new(
+                GatewayError::new(GatewayErrorKind::UpstreamUnavailable, "upstream unavailable"),
+                AccountProbeErrorSource::Upstream,
+                Some(UpstreamSendState::Sent),
+                None,
+            )
+            .with_upstream_failure(
+                Some(429),
+                Some(OpaqueUpstreamValue::new("MODEL_CAPACITY_EXHAUSTED")),
             ))
         })
     }

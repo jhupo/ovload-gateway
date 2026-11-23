@@ -8,7 +8,11 @@ use futures::future::BoxFuture;
 use crate::error::{ClientVisibleUpstreamResponse, GatewayError, GatewayErrorKind};
 use crate::identity::ProviderKind;
 use crate::routing::UpstreamModelId;
-use crate::{account::ProviderAccountId, operation::Operation, upstream::UpstreamSendState};
+use crate::{
+    account::ProviderAccountId,
+    operation::Operation,
+    upstream::{OpaqueUpstreamValue, UpstreamSendState},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AccountProbeRequest {
@@ -102,6 +106,8 @@ pub struct AccountProbeError {
     gateway: GatewayError,
     source: AccountProbeErrorSource,
     send_state: Option<UpstreamSendState>,
+    upstream_status: Option<u16>,
+    upstream_error_code: Option<OpaqueUpstreamValue>,
     upstream_response: Option<Box<AccountProbeUpstreamResponse>>,
 }
 
@@ -117,8 +123,21 @@ impl AccountProbeError {
             gateway,
             source,
             send_state,
+            upstream_status: None,
+            upstream_error_code: None,
             upstream_response: upstream_response.map(Box::new),
         }
+    }
+
+    #[must_use]
+    pub fn with_upstream_failure(
+        mut self,
+        status: Option<u16>,
+        code: Option<OpaqueUpstreamValue>,
+    ) -> Self {
+        self.upstream_status = status;
+        self.upstream_error_code = code;
+        self
     }
 
     #[must_use]
@@ -149,6 +168,20 @@ impl AccountProbeError {
     #[must_use]
     pub fn client_error_code(&self) -> Option<&str> {
         self.gateway.client_error_code()
+    }
+
+    #[must_use]
+    pub fn upstream_status(&self) -> Option<u16> {
+        self.upstream_response()
+            .map(AccountProbeUpstreamResponse::status)
+            .or(self.upstream_status)
+    }
+
+    #[must_use]
+    pub fn upstream_error_code(&self) -> Option<&str> {
+        self.upstream_error_code
+            .as_ref()
+            .map(OpaqueUpstreamValue::as_str)
     }
 
     #[must_use]
