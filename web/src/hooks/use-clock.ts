@@ -32,10 +32,19 @@ function createClock(interval: number) {
 const clocks = new Map<number, ReturnType<typeof createClock>>()
 // Rows share a timer; the last subscriber cleans it up.
 export function useClock(interval = 1000) {
+  return useClockValue((now) => now, interval)
+}
+
+export function useClockValue<T extends number | string | boolean>(
+  select: (now: number) => T,
+  interval = 1000
+) {
   let clock = clocks.get(interval)
   if (!clock) {
     clock = createClock(interval)
     clocks.set(interval, clock)
   }
-  return useSyncExternalStore(clock.subscribe, clock.snapshot, clock.snapshot)
+  const snapshot = clock.snapshot
+  const selectedSnapshot = () => select(snapshot())
+  return useSyncExternalStore(clock.subscribe, selectedSnapshot, selectedSnapshot)
 }

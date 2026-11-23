@@ -11,7 +11,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useClock } from '@/hooks/use-clock'
+import { useClockValue } from '@/hooks/use-clock'
 import { useCommerce, planDocument } from '@/hooks/use-commerce'
 import { useCommercePage } from '@/hooks/use-commerce-page'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -102,6 +102,49 @@ function PlanStatusCell({ row }: CellContext<Plan, unknown>) {
   )
 }
 
+function SubscriptionStatus({ row }: { row: Subscription }) {
+  const { t } = useTranslation()
+  const status = useClockValue((now) => statusOf(row, now))
+  return (
+    <Badge
+      variant='secondary'
+      className={
+        status === 'active'
+          ? 'bg-[var(--telemetry-2)]/10 font-normal text-[var(--telemetry-2)]'
+          : 'font-normal'
+      }
+    >
+      {t('subscriptions.' + status)}
+    </Badge>
+  )
+}
+
+function SubscriptionExpiry({ row }: { row: Subscription }) {
+  const { t, i18n } = useTranslation()
+  const remaining = useClockValue((now) =>
+    statusOf(row, now) === 'active'
+      ? Math.ceil((Date.parse(row.end) - now) / day)
+      : statusOf(row, now)
+  )
+  return (
+    <div className='space-y-1 text-xs tabular-nums'>
+      <time dateTime={row.end}>
+        {new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+          timeZone: row.plan.timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date(row.end))}
+      </time>
+      <p className='text-muted-foreground'>
+        {typeof remaining === 'number'
+          ? t('subscriptions.remaining', { count: remaining })
+          : t('subscriptions.' + remaining)}
+      </p>
+    </div>
+  )
+}
+
 function SubscriptionWorkspace({
   plansOnly = false,
   search,
@@ -111,8 +154,7 @@ function SubscriptionWorkspace({
   search: SubscriptionSearch
   setSearch: (next: SubscriptionSearch) => void
 }) {
-  const { t, i18n } = useTranslation()
-  const now = useClock()
+  const { t } = useTranslation()
   const tab = plansOnly ? 'plans' : 'subscriptions'
   const { query, status, plan: planFilter } = search
   const {
@@ -177,39 +219,8 @@ function SubscriptionWorkspace({
       </div>
     )
   }
-  const statusBadge = (row: Subscription) => (
-    <Badge
-      variant='secondary'
-      className={
-        statusOf(row, now) === 'active'
-          ? 'bg-[var(--telemetry-2)]/10 font-normal text-[var(--telemetry-2)]'
-          : 'font-normal'
-      }
-    >
-      {t('subscriptions.' + statusOf(row, now))}
-    </Badge>
-  )
-  const expiry = (row: Subscription) => (
-    <div className='space-y-1 text-xs tabular-nums'>
-      <time dateTime={row.end}>
-        {new Intl.DateTimeFormat(i18n.resolvedLanguage, {
-          timeZone: row.plan.timezone,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        }).format(new Date(row.end))}
-      </time>
-      <p className='text-muted-foreground'>
-        {statusOf(row, now) === 'active'
-          ? t('subscriptions.remaining', {
-              count: Math.ceil((Date.parse(row.end) - now) / day),
-            })
-          : t('subscriptions.' + statusOf(row, now))}
-      </p>
-    </div>
-  )
   const actions = (row: Subscription) => (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant='ghost'
@@ -301,13 +312,13 @@ function SubscriptionWorkspace({
           title={t('subscriptions.expires')}
         />
       ),
-      cell: ({ row }) => expiry(row.original),
+      cell: ({ row }) => <SubscriptionExpiry row={row.original} />,
     },
     {
       id: 'status',
       size: 100,
       header: t('subscriptions.status'),
-      cell: ({ row }) => statusBadge(row.original),
+      cell: ({ row }) => <SubscriptionStatus row={row.original} />,
     },
     {
       id: 'actions',
@@ -459,7 +470,9 @@ function SubscriptionWorkspace({
       cell: ({ row }) => planActions(row.original),
     },
   ]
-  const recordStatuses = records.map((row) => statusOf(row, now)).join('|')
+  const recordStatuses = useClockValue((now) =>
+    status === 'all' ? '' : records.map((row) => statusOf(row, now)).join('|')
+  )
   const filteredRecords = useMemo(
     () =>
       records.filter((row, index) => {
@@ -598,7 +611,7 @@ function SubscriptionWorkspace({
                   <div className='space-y-4'>
                     <div className='flex items-center gap-2'>
                       <div className='min-w-0 flex-1'>{identity(row)}</div>
-                      {statusBadge(row)}
+                      <SubscriptionStatus row={row} />
                       <div
                         onFocusCapture={(e) => {
                           if (
@@ -615,7 +628,7 @@ function SubscriptionWorkspace({
                       <span className='min-w-0 truncate text-sm font-medium'>
                         {row.plan.name}
                       </span>
-                      {expiry(row)}
+                      <SubscriptionExpiry row={row} />
                     </div>
                     <Quota row={row} />
                   </div>

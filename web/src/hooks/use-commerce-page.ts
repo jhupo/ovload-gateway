@@ -90,7 +90,7 @@ export function useCommercePage(
     ready: !!query.data && !(query.isError && query.isPlaceholderData),
     error: query.error,
     refresh: query.refetch,
-    busy: mutation.busy || query.isFetching,
+    busy: mutation.busy || query.isPlaceholderData,
     tableState: {
       pagination,
       sorting,

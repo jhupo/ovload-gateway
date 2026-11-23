@@ -11,7 +11,7 @@ import {
 import { Copy, Download, MoreHorizontal, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { useClock } from '@/hooks/use-clock'
+import { useClockValue } from '@/hooks/use-clock'
 import { useCommercePage } from '@/hooks/use-commerce-page'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -56,10 +56,22 @@ import { type RedemptionCode, codeStatus } from './data'
 import { CodeGenerator } from './generator'
 import { RedemptionHistory } from './history'
 
+function CodeStatusBadge({ code }: { code: RedemptionCode }) {
+  const { t } = useTranslation()
+  const status = useClockValue((now) => codeStatus(code, now))
+  return (
+    <Badge
+      variant='secondary'
+      className={`font-normal transition-none ${['unused', 'partial'].includes(status) ? 'bg-badge-success text-badge-success-foreground' : 'bg-badge-neutral text-badge-neutral-foreground'}`}
+    >
+      {t(`redemption.${status}`)}
+    </Badge>
+  )
+}
+
 export function RedemptionCodes() {
   const { t, i18n } = useTranslation()
   const tr = (key: string) => t(`redemption.${key}`)
-  const now = useClock()
   const [query, setQuery] = useState(''),
     [type, setType] = useState('all'),
     [status, setStatus] = useState('all')
@@ -94,14 +106,17 @@ export function RedemptionCodes() {
     onPaginationChange,
     total,
   } = tableState
-  const codeStatuses = records.map((row) => codeStatus(row, now)).join('|')
+  const matchingCodes = useClockValue((now) =>
+    status === 'all'
+      ? ''
+      : records.map((row) => (codeStatus(row, now) === status ? '1' : '0')).join('')
+  )
   const data = useMemo(
     () =>
-      records.filter(
-        (_, index) =>
-          status === 'all' || codeStatuses.split('|')[index] === status
-      ),
-    [records, status, codeStatuses]
+      status === 'all'
+        ? records
+        : records.filter((_, index) => matchingCodes[index] === '1'),
+    [records, status, matchingCodes]
   )
   const date = (v: string) =>
     new Intl.DateTimeFormat(i18n.language, {
@@ -124,14 +139,6 @@ export function RedemptionCodes() {
         : r.type === 'concurrency'
           ? `+${r.value}`
           : tr('registration')
-  const badge = (r: RedemptionCode) => (
-    <Badge
-      variant='secondary'
-      className={`font-normal transition-none ${['unused', 'partial'].includes(codeStatus(r, now)) ? 'bg-badge-success text-badge-success-foreground' : 'bg-badge-neutral text-badge-neutral-foreground'}`}
-    >
-      {tr(codeStatus(r, now))}
-    </Badge>
-  )
   const copy = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value)
@@ -290,7 +297,7 @@ export function RedemptionCodes() {
       size: 100,
       meta: { label: tr('status') },
       header: tr('status'),
-      cell: ({ row }) => badge(row.original),
+      cell: ({ row }) => <CodeStatusBadge code={row.original} />,
     },
     {
       accessorKey: 'createdAt',
@@ -346,6 +353,7 @@ export function RedemptionCodes() {
   )
   const exportCodes = async () => {
     const rows = selected.length ? selected : (await exportAll()).codes
+    const now = Date.now()
     const escape = (v: string) =>
       '"' + (/^[=+\-@\t\r]/.test(v) ? "'" + v : v).replaceAll('"', '""') + '"'
     const csv = [
@@ -514,7 +522,9 @@ export function RedemptionCodes() {
                       {table.getColumn('value')?.getIsVisible() && (
                         <strong>{benefit(r)}</strong>
                       )}
-                      {table.getColumn('status')?.getIsVisible() && badge(r)}
+                      {table.getColumn('status')?.getIsVisible() && (
+                        <CodeStatusBadge code={r} />
+                      )}
                     </div>
                     {table.getColumn('usage')?.getIsVisible() && (
                       <div className='flex justify-between text-xs'>
@@ -604,7 +614,7 @@ export function RedemptionCodes() {
             <>
               <div className='flex flex-wrap items-center justify-between gap-2'>
                 <code className='text-xs'>{history.code}</code>
-                {badge(history)}
+                <CodeStatusBadge code={history} />
               </div>
               <RedemptionHistory code={history} />
             </>
