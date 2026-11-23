@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { userEvent } from 'vitest/browser'
+import { page, userEvent } from 'vitest/browser'
 import { render } from 'vitest-browser-react'
 import i18n from '@/i18n'
 import { newPlan, type Subscription } from './data'
@@ -48,24 +48,34 @@ vi.mock('@/hooks/use-commerce-page', () => ({
   }),
 }))
 
-test('subscription actions remain clickable across quota clock updates', async () => {
-  await i18n.changeLanguage('en')
-  const screen = await render(<Subscriptions />)
-  const trigger = screen.getByRole('button', {
-    name: i18n.t('subscriptions.actionsFor', { name: 'Sample' }),
-  })
-  for (const action of ['adjust', 'reset', 'revoke']) {
-    await userEvent.click(trigger)
-    const item = screen.getByRole('menuitem', {
-      name: i18n.t(`subscriptions.${action}`),
+test.each([
+  { layout: 'desktop', width: 1440 },
+  { layout: 'mobile', width: 390 },
+])(
+  '$layout subscription actions remain clickable across quota clock updates',
+  async ({ layout, width }) => {
+    await page.viewport(width, 900)
+    await i18n.changeLanguage('en')
+    const screen = await render(<Subscriptions />)
+    const rows = screen.getByRole(layout === 'desktop' ? 'table' : 'list')
+    const trigger = rows.getByRole('button', {
+      name: i18n.t('subscriptions.actionsFor', { name: 'Sample' }),
     })
-    if (action === 'adjust') {
-      await new Promise((resolve) => setTimeout(resolve, 2100))
+    for (const action of ['adjust', 'reset', 'revoke']) {
+      await userEvent.click(trigger)
+      const item = screen.getByRole('menuitem', {
+        name: i18n.t(`subscriptions.${action}`),
+      })
+      await expect.element(item).toBeVisible()
+      if (action === 'adjust') {
+        await new Promise((resolve) => setTimeout(resolve, 2100))
+      }
+      await userEvent.click(item)
+      const dialog = screen.getByRole(action === 'adjust' ? 'dialog' : 'alertdialog')
+      await expect.element(dialog).toBeVisible()
+      await userEvent.click(dialog.getByRole('button', { name: /cancel/i }))
+      await expect.element(dialog).not.toBeInTheDocument()
     }
-    await userEvent.click(item)
-    const dialog = screen.getByRole(action === 'adjust' ? 'dialog' : 'alertdialog')
-    await expect.element(dialog).toBeVisible()
-    await userEvent.click(dialog.getByRole('button', { name: /cancel/i }))
-    await expect.element(dialog).not.toBeInTheDocument()
-  }
-})
+  },
+  15_000
+)
