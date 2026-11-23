@@ -98,14 +98,9 @@ pub(super) async fn management_update(
         return Err(IdentityError::Conflict);
     }
     let email_changed = old.customer.email != command.email;
-    let changed = old.max_concurrency != command.max_concurrency
-        || old.requests_per_minute != command.requests_per_minute
-        || old.customer_max_concurrency != command.max_concurrency
-        || old.customer_requests_per_minute != command.requests_per_minute
-        || email_changed
-        || password_hash.is_some();
+    let credentials_changed = email_changed || password_hash.is_some();
     sqlx::query("update identity_users set display_name=$3,max_concurrency=$4,requests_per_minute=$5,revision=revision+1,authority_generation=authority_generation+case when $6 then 1 else 0 end,updated_at=clock_timestamp(),email=$7,notes=$8,password_hash=coalesce($9,password_hash),email_verified_at=case when $10 then null else email_verified_at end where tenant_id=$1 and id=$2")
-        .bind(tenant.as_uuid()).bind(user.as_uuid()).bind(command.display_name).bind(i64::from(command.max_concurrency)).bind(i64::from(command.requests_per_minute)).bind(changed)
+        .bind(tenant.as_uuid()).bind(user.as_uuid()).bind(command.display_name).bind(i64::from(command.max_concurrency)).bind(i64::from(command.requests_per_minute)).bind(credentials_changed)
         .bind(command.email).bind(command.notes).bind(password_hash.as_ref().map(|hash| hash.expose_secret())).bind(email_changed)
         .execute(&mut *tx).await.map_err(db_error)?;
     if old.customer_max_concurrency != command.max_concurrency
@@ -114,7 +109,7 @@ pub(super) async fn management_update(
         sqlx::query("update identity_tenants set max_concurrency=$2,requests_per_minute=$3,revision=revision+1,updated_at=clock_timestamp() where id=$1")
             .bind(tenant.as_uuid()).bind(i64::from(command.max_concurrency)).bind(i64::from(command.requests_per_minute)).execute(&mut *tx).await.map_err(db_error)?;
     }
-    if changed {
+    if credentials_changed {
         revoke_all(
             &mut tx,
             IdentityOwner::Customer {

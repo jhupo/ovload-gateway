@@ -69,7 +69,7 @@ pub trait IdentityStore: Send + Sync {
         &self,
         owner: Option<IdentityOwner>,
     ) -> IdentityResult<()>;
-    /// Lock and revalidate the owner before inserting; maximum ten active sessions.
+    /// Lock and revalidate the owner before inserting. Customer browsers have a ten-session cap.
     async fn create_session(&self, command: NewIdentitySession) -> IdentityResult<()>;
     /// Revalidate owner/tenant status and authority generation, never use a snapshot.
     async fn session(

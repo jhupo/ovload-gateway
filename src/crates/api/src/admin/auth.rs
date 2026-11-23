@@ -96,7 +96,13 @@ where
         let session = request
             .authenticate(services.identity())
             .await
-            .map_err(|error| map_identity_error(error.kind()))?;
+            .map_err(|error| {
+                if error.requires_step_up() {
+                    AdminError::step_up_required()
+                } else {
+                    map_identity_error(error.kind())
+                }
+            })?;
         services
             .management_security()
             .authorize_platform(&session, permission)

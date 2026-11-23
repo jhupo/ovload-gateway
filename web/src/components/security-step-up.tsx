@@ -14,6 +14,8 @@ import {
 import { Input } from '@/components/ui/input'
 
 type PendingVerification = {
+  sessionId: string
+  promise: Promise<void>
   resolve: () => void
   reject: (error: Error) => void
 }
@@ -26,31 +28,27 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
   const pending = useRef<PendingVerification | null>(null)
 
   useEffect(() => {
-    const uninstall = installStepUpHandler(async () => {
+    const uninstall = installStepUpHandler(() => {
       const session = sessionPort().getSession()
-      if (session?.audience !== 'management') return
-      const sessionId = session.id
-      const csrf = session.csrf_token
-      const expired = () => {
-        sessionPort().invalidateSession(sessionId)
-        return new ApiError(401, 'identity.unauthorized', '登录状态已过期', undefined, sessionId)
-      }
-      if (!csrf) throw expired()
-      const status = await fetch('/api/admin/v1/auth/step-up/status', {
-        credentials: 'include',
-        cache: 'no-store',
-        signal: AbortSignal.timeout(15_000),
+      if (session?.audience !== 'management' || !session.csrf_token)
+        return Promise.reject(new ApiError(401, 'identity.unauthorized', '登录状态已过期'))
+      if (pending.current?.sessionId === session.id)
+        return pending.current.promise
+      pending.current?.reject(new Error('登录状态已变化'))
+      let completion!: Pick<PendingVerification, 'resolve' | 'reject'>
+      const promise = new Promise<void>((resolve, reject) => {
+        completion = { resolve, reject }
       })
-      if (status.status === 401) throw expired()
-      if (!status.ok) throw new Error('无法检查安全认证状态')
-      if ((await status.json()).allowed) return
-      await new Promise<void>((resolve, reject) => {
-        pending.current = { resolve, reject }
-        setPassword('')
-        setOpen(true)
-      })
+      pending.current = { sessionId: session.id, promise, ...completion }
+      setPassword('')
+      setOpen(true)
+      return promise
     })
-    return uninstall
+    return () => {
+      uninstall()
+      pending.current?.reject(new Error('已取消验证'))
+      pending.current = null
+    }
   }, [])
 
   const close = (error?: Error) => {
@@ -68,7 +66,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
     if (busy) return
     const session = sessionPort().getSession()
     const request = pending.current
-    if (!request || session?.audience !== 'management' || !session.csrf_token) {
+    if (!request || session?.id !== request.sessionId || !session.csrf_token) {
       close(new Error('登录状态已变化'))
       return
     }
@@ -84,6 +82,11 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ password }),
       })
+      if (pending.current !== request) return
+      if (sessionPort().getSession()?.id !== request.sessionId) {
+        close(new Error('登录状态已变化'))
+        return
+      }
       if (response.status === 401) {
         sessionPort().invalidateSession(session.id)
         close(new ApiError(401, 'identity.unauthorized', '登录状态已过期'))
@@ -92,6 +95,7 @@ export function StepUpProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error('验证失败，请检查密码或稍后重试')
       close()
     } catch (error) {
+      if (pending.current !== request) return
       toast.error(
         error instanceof TypeError
           ? '无法完成身份验证，请稍后重试'

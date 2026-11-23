@@ -6,10 +6,16 @@ import { newPlan, type Subscription } from './data'
 import { Subscriptions } from './index'
 import '@/styles/index.css'
 
+const routeSearch = vi.hoisted(() => ({
+  query: '',
+  status: 'all',
+  plan: 'all',
+}))
+
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-router')>(),
   getRouteApi: () => ({
-    useSearch: () => ({ query: '', status: 'all', plan: 'all' }),
+    useSearch: () => routeSearch,
     useNavigate: () => () => {},
   }),
 }))
@@ -47,6 +53,19 @@ vi.mock('@/hooks/use-commerce-page', () => ({
     },
   }),
 }))
+
+test('subscription search displays a server match by plan name', async () => {
+  await page.viewport(1440, 900)
+  routeSearch.query = plan.name
+  try {
+    const screen = await render(<Subscriptions />)
+    await expect
+      .element(screen.getByRole('table').getByText('Sample', { exact: true }))
+      .toBeVisible()
+  } finally {
+    routeSearch.query = ''
+  }
+})
 
 test.each([
   { layout: 'desktop', width: 1440 },

@@ -47,8 +47,6 @@ const snapshot: GatewaySettingsSnapshot = {
     resetWeight: 0,
     queueWeight: 0,
   },
-  minCodexDesktopVersion: null,
-  minCodexCliVersion: null,
   usageRetentionDays: 7,
   opsEventRetentionDays: 30,
   auditRetentionDays: 90,
@@ -108,17 +106,13 @@ test('real bounds reject unsafe integers and preserve zero queue and unlimited c
   ).toBe(false)
 })
 
-test('minimum client versions and probe models validate against the real fields', () => {
+test('probe models validate against the real fields', () => {
   const draft = gatewayDraft(snapshot)
-  draft.minCodexCliVersion = '1.2.3-rc.1+fixture'
   expect(gatewayErrors(draft)).toEqual({})
-  draft.minCodexDesktopVersion = '01.2.3'
   draft.accountAutoFreezeProbeModel = ' fixture-model'
   expect(gatewayErrors(draft)).toEqual({
-    minCodexDesktopVersion: 'versionError',
     accountAutoFreezeProbeModel: 'modelError',
   })
-  expect(fieldTab('minCodexDesktopVersion')).toBe('codex')
   expect(fieldTab('accountAutoFreezeThreshold')).toBe('codex')
   expect(fieldTab('maxAccountRotations')).toBe('basic')
   expect(fieldTab('modelMappings')).toBe('models')
@@ -224,6 +218,8 @@ test('cancelling authentication never writes and permits a later retry', async (
         data: { ...snapshot, configRevision: 18 },
       })
     )
+  ).mockResolvedValueOnce(
+    Response.json({ errorKey: 'identity.step_up_required' }, { status: 403 })
   )
   vi.stubGlobal('fetch', fetch)
   vi.mocked(ensureStepUp).mockRejectedValueOnce(
@@ -232,11 +228,11 @@ test('cancelling authentication never writes and permits a later retry', async (
   await expect(gatewaySettingsApi.replace(snapshot)).rejects.toBeInstanceOf(
     PlatformPreflightError
   )
-  expect(fetch).not.toHaveBeenCalled()
+  expect(fetch).toHaveBeenCalledTimes(1)
   await expect(gatewaySettingsApi.replace(snapshot)).resolves.toMatchObject({
     configRevision: 18,
   })
-  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(fetch).toHaveBeenCalledTimes(2)
 })
 
 test('provider updates are scoped to changed providers and preserve unknown configurations', () => {

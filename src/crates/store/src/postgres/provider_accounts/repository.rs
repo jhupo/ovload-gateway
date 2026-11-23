@@ -17,6 +17,7 @@ pub trait ProviderAccountRepository: Send + Sync {
         &self,
         provider_kind: Option<&str>,
         include_disabled: bool,
+        account_ids: Option<Vec<String>>,
     ) -> StoreResult<Vec<ProviderAccountSummary>>;
     async fn insert_provider_account(&self, account: NewProviderAccount) -> StoreResult<()>;
     async fn update_provider_account(&self, account: UpdateProviderAccount) -> StoreResult<bool>;
@@ -153,6 +154,7 @@ impl ProviderAccountRepository for PgProviderAccountRepository {
         &self,
         provider_kind: Option<&str>,
         include_disabled: bool,
+        account_ids: Option<Vec<String>>,
     ) -> StoreResult<Vec<ProviderAccountSummary>> {
         let rows = sqlx::query(
             "select coalesce(proxy_enabled, true) as outbound_proxy_enabled, coalesce(max_websocket_connections, 0) as outbound_proxy_max_websocket_connections, auto_location, detected_location_json, location_country, location_region, location_city, location_timezone, outbound_proxy_id, outbound_proxy_url, id, provider_kind, name, notes, email, upstream_user_id,
@@ -165,10 +167,12 @@ impl ProviderAccountRepository for PgProviderAccountRepository {
              left join (select id as location_proxy_id, enabled as proxy_enabled, max_websocket_connections, auto_location, detected_location_json, location_country, location_region, location_city, location_timezone from outbound_proxies) proxy_location
                on outbound_proxy_id = location_proxy_id
              where ($1::text is null or provider_kind = $1) and ($2 or enabled)
+               and ($3::text[] is null or id = any($3))
              order by provider_kind, name, id",
         )
         .bind(provider_kind)
         .bind(include_disabled)
+        .bind(account_ids)
         .fetch_all(&self.pool)
         .await
         .map_err(|source| postgres_unavailable("list provider accounts", source))?;

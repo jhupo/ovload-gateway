@@ -89,6 +89,44 @@ struct CoreRefreshRow {
 }
 
 #[tokio::test]
+async fn provider_scheduling_list_filters_enabled_accounts_in_scope() {
+    let Some(database) = TestDatabase::create("provider_scheduling_scope").await else {
+        return;
+    };
+    let repository = PgProviderAccountRepository::new(
+        database.pool.clone(),
+        crate::postgres::credential_cipher(),
+    );
+    let mut disabled = account("acct_disabled", "disabled-user");
+    disabled.enabled = false;
+    let mut other_provider = account("acct_other_provider", "other-provider-user");
+    other_provider.provider_kind = "xai".to_owned();
+    for entry in [
+        account("acct_allowed", "allowed-user"),
+        account("acct_unlisted", "unlisted-user"),
+        disabled,
+        other_provider,
+    ] {
+        repository.insert_provider_account(entry).await.unwrap();
+    }
+    let provider = ProviderKind::new("openai").unwrap();
+    let ids = ["acct_allowed", "acct_disabled", "acct_other_provider"]
+        .map(|id| ProviderAccountId::new(id).unwrap());
+    let filtered = repository
+        .list_for_provider(&provider, Some(&ids))
+        .await
+        .unwrap();
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].id(), &ids[0]);
+    assert!(repository
+        .list_for_provider(&provider, Some(&[]))
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(repository.list_for_provider(&provider, None).await.unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn refresh_candidates_should_filter_order_and_bound_in_one_query() {
     let Some(database) = TestDatabase::create("provider_refresh_candidates").await else {
         return;
@@ -1545,7 +1583,7 @@ async fn account_notes_round_trip_and_survive_import_and_scheduling_updates() {
         })
         .await
         .unwrap();
-    let records = repository.list_provider_accounts(None, true).await.unwrap();
+    let records = repository.list_provider_accounts(None, true, None).await.unwrap();
     assert_eq!(records[0].notes.as_deref(), Some("团队备用\n下月续费"));
     let audits: String = sqlx::query_scalar("select json_agg(a)::text from admin_audit_events a")
         .fetch_one(&database.pool)

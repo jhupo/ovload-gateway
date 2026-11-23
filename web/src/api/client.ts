@@ -49,7 +49,6 @@ export async function apiRequest<T>(
     public: options.public,
     revision: options.revision,
     idempotencyKey: options.idempotencyKey,
-    skipStepUp: method === 'DELETE' && ['/session', '/auth/session'].includes(path),
   })
   const contentType = response.headers.get('Content-Type') ?? ''
   const payload: unknown =

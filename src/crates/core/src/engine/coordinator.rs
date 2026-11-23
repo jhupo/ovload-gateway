@@ -1379,9 +1379,8 @@ where
                             self.continuation_attempt,
                             ContinuationAttempt::None | ContinuationAttempt::ReplayAny
                         )
-                        // 跨 Provider 候选推进必然换号（账号行按 Provider 隔离），
-                        // 预算耗尽后不再推进，交回容量类失败的原有终态语义。
-                        && self.account_rotations < self.plan.account_selection_policy().max_account_rotations()
+                        && (self.last_attempt_account.is_none()
+                            || self.account_rotations < self.plan.account_selection_policy().max_account_rotations())
                         && self.advance_provider_candidate();
                     let retryable = self
                         .apply_retry_policy(super::policy::RetryFacts {

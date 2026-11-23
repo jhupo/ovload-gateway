@@ -20,8 +20,6 @@ export function CodexSettings({
   const grid = 'grid min-w-0 grid-cols-1 gap-4 @xl/gateway:grid-cols-2'
   const field = (
     name:
-      | 'minCodexDesktopVersion'
-      | 'minCodexCliVersion'
       | 'accountAutoFreezeThreshold'
       | 'accountAutoFreezeWindowSeconds'
       | 'accountAutoFreezeDurationSeconds'

@@ -33,22 +33,20 @@ pub(super) async fn create_session(
         }
         revoke_owned(&mut tx, command.session.owner, previous).await?;
     }
-    let (tenant, user, principal) = owner_columns(command.session.owner);
-    let count: i64 = sqlx::query_scalar(
-        "select count(*) from identity_sessions where audience=$1
-         and tenant_id is not distinct from $2 and user_id is not distinct from $3
-         and principal_id is not distinct from $4 and revoked_at is null and not is_admin_key
-         and expires_at > clock_timestamp()",
-    )
-    .bind(audience(command.session.owner).as_str())
-    .bind(tenant)
-    .bind(user)
-    .bind(principal)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(db_error)?;
-    if count >= 10 {
-        return Err(IdentityError::RateLimited);
+    if let IdentityOwner::Customer { tenant_id, user_id } = command.session.owner {
+        let count: i64 = sqlx::query_scalar(
+            "select count(*) from identity_sessions where audience='customer'
+             and tenant_id=$1 and user_id=$2 and revoked_at is null and not is_admin_key
+             and expires_at > clock_timestamp()",
+        )
+        .bind(tenant_id.as_uuid())
+        .bind(user_id.as_uuid())
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        if count >= 10 {
+            return Err(IdentityError::RateLimited);
+        }
     }
     insert(&mut tx, &command).await?;
     audit(
@@ -70,7 +68,7 @@ pub(super) async fn session(
 ) -> IdentityResult<Option<IdentitySession>> {
     let row = match audience {
         IdentityAudience::Customer => sqlx::query(
-            "select s.id,s.tenant_id,s.user_id,s.principal_id,s.authority_generation,s.expires_at
+            "select s.id,s.tenant_id,s.user_id,s.principal_id,s.authority_generation,s.expires_at,s.is_admin_key
              from identity_sessions s
              join identity_users u on u.tenant_id=s.tenant_id and u.id=s.user_id
              join identity_tenants t on t.id=u.tenant_id
@@ -79,7 +77,7 @@ pub(super) async fn session(
              and u.authority_generation=s.authority_generation",
         ),
         IdentityAudience::Management => sqlx::query(
-            "select s.id,s.tenant_id,s.user_id,s.principal_id,s.authority_generation,s.expires_at
+            "select s.id,s.tenant_id,s.user_id,s.principal_id,s.authority_generation,s.expires_at,s.is_admin_key
              from identity_sessions s
              join identity_management_principals p on p.id=s.principal_id
              where s.audience='management' and s.access_digest=$1 and s.revoked_at is null
@@ -91,27 +89,32 @@ pub(super) async fn session(
     .fetch_optional(&store.pool)
     .await
     .map_err(db_error)?;
-    let session = row
-        .as_ref()
-        .map(|row| session_record(row, audience))
-        .transpose()?;
-    if let Some(ref s) = session {
-        let minutes = super::security::policy(&store.pool)
-            .await?
-            .access_token_minutes;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let session = session_record(&row, audience)?;
+    if row.try_get("is_admin_key").map_err(db_error)? {
+        return Ok(Some(session));
+    }
+    let minutes = super::security::policy(&store.pool)
+        .await?
+        .access_token_minutes;
+    if minutes > 0 {
         let valid: Option<bool> = sqlx::query_scalar(
-            "update identity_sessions set
-             revoked_at=case when not is_admin_key and $2>0 and last_seen_at<=clock_timestamp()-make_interval(mins=>$2) then clock_timestamp() else null end,
+            "update identity_sessions s set
+             revoked_at=case when greatest(last_seen_at, a.idle_timeout_enabled_at)
+               <=clock_timestamp()-make_interval(mins=>$2) then clock_timestamp() else null end,
              last_seen_at=clock_timestamp()
-             where id=$1 and revoked_at is null and expires_at>clock_timestamp()
+             from authentication_security a
+             where a.singleton and s.id=$1 and s.revoked_at is null and s.expires_at>clock_timestamp()
              returning revoked_at is null",
         )
-        .bind(s.id.as_uuid()).bind(minutes as i32).fetch_optional(&store.pool).await.map_err(db_error)?;
+        .bind(session.id.as_uuid()).bind(minutes as i32).fetch_optional(&store.pool).await.map_err(db_error)?;
         if valid != Some(true) {
             return Ok(None);
         }
     }
-    Ok(session)
+    Ok(Some(session))
 }
 
 pub(super) async fn revoke_session(

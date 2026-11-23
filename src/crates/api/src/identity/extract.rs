@@ -1,7 +1,7 @@
 //! Strict browser credential parsing; no fallback to model or deployment keys.
 
 use axum::{
-    extract::FromRequestParts,
+    extract::{FromRequestParts, MatchedPath},
     http::{HeaderMap, Method, header, request::Parts},
 };
 use headers::{Cookie, HeaderMapExt as _};
@@ -139,11 +139,13 @@ impl<S: Send + Sync> FromRequestParts<S> for IdentityRequest {
         Ok(Self {
             audience: policy.audience,
             step_up_required: policy.audience == IdentityAudience::Management
-                && !matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS)
-                && !parts.uri.path().ends_with("/auth/step-up")
-                && !parts.uri.path().ends_with("/auth/session")
-                && parts.uri.path() != "/api/admin/v1/session"
-                && !parts.uri.path().ends_with("/auth/sessions"),
+                && requires_step_up(
+                    &parts.method,
+                    parts
+                        .extensions
+                        .get::<MatchedPath>()
+                        .map_or(parts.uri.path(), MatchedPath::as_str),
+                ),
             human_token: single_header(headers, "x-turnstile-token").map_err(fail)?,
             hostname: url::Url::parse(&policy.public_origin)
                 .ok()
@@ -157,6 +159,19 @@ impl<S: Send + Sync> FromRequestParts<S> for IdentityRequest {
             idempotency_key,
         })
     }
+}
+
+fn requires_step_up(method: &Method, path: &str) -> bool {
+    !matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS)
+        && !matches!(
+            path,
+            "/api/admin/v1/auth/step-up"
+                | "/api/admin/v1/auth/session"
+                | "/api/admin/v1/auth/sessions"
+                | "/api/admin/v1/session"
+                | "/api/admin/accounts/connection-test/models"
+                | "/api/admin/accounts/models/preview"
+        )
 }
 
 fn single_header(headers: &HeaderMap, name: &str) -> Result<Option<String>, IdentityError> {

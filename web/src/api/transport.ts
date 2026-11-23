@@ -16,7 +16,6 @@ export type TransportRequest = {
   signal?: AbortSignal
   timeoutMs?: number
   accept?: string
-  skipStepUp?: boolean
   public?: boolean
   revision?: number | string
   idempotencyKey?: string
@@ -36,7 +35,6 @@ export async function transportRequest({
   signal,
   timeoutMs = 15_000,
   accept = 'application/json',
-  skipStepUp = false,
   public: isPublic = false,
   revision,
   idempotencyKey,
@@ -46,9 +44,7 @@ export async function transportRequest({
     throw new ApiError(401, 'identity.unauthorized', 'Management session required')
   if (!isPublic && audience === 'customer' && method !== 'GET' && session?.audience !== 'customer')
     throw new ApiError(401, 'identity.unauthorized', 'Customer session required')
-  if (!isPublic && audience !== 'customer' && method !== 'GET' && !skipStepUp)
-    await ensureStepUp()
-  const current = sessionPort().getSession()
+  const current = session
   const csrf = isPublic || method === 'GET' ? undefined : current?.csrf_token
   if (!isPublic && method !== 'GET' && !csrf) {
     if (!isPublic && current?.id) sessionPort().invalidateSession(current.id)
@@ -79,16 +75,34 @@ export async function transportRequest({
         : body instanceof Blob
           ? body
           : JSON.stringify(body)
-    const response = await fetch(endpoint(audience, path), {
-      method,
-      headers,
-      credentials: 'include',
-      cache: 'no-store',
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
-        : AbortSignal.timeout(timeoutMs),
-      body: requestBody,
-    })
+    const send = () =>
+      fetch(endpoint(audience, path), {
+        method,
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+          : AbortSignal.timeout(timeoutMs),
+        body: requestBody,
+      })
+    let response = await send()
+    if (!isPublic && audience !== 'customer' && response.status === 403) {
+      const challenge = await response.clone().json().catch(() => null)
+      if (
+        challenge?.error?.code === 'identity.step_up_required' ||
+        challenge?.errorKey === 'identity.step_up_required'
+      ) {
+        signal?.throwIfAborted()
+        if (sessionPort().getSession()?.id !== current?.id)
+          throw new ApiError(401, 'identity.unauthorized', 'Session changed', undefined, current?.id)
+        await ensureStepUp()
+        signal?.throwIfAborted()
+        if (sessionPort().getSession()?.id !== current?.id)
+          throw new ApiError(401, 'identity.unauthorized', 'Session changed', undefined, current?.id)
+        response = await send()
+      }
+    }
     if (response.status === 401 && !isPublic && current?.id)
       sessionPort().invalidateSession(current.id)
     if (!isPublic && current?.id && sessionPort().getSession()?.id !== current.id)

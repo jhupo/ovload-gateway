@@ -3,17 +3,21 @@
 use chrono::{Duration, Utc};
 use ovload_admin::{
     model::{
+        commerce::CommerceCommand,
         identity::{CustomerUserRecord, IdentityStatus},
         identity_access::*,
         identity_lifecycle::*,
     },
-    ports::{identity::IdentityStore as _, identity_lifecycle::IdentityLifecycleStore as _},
+    ports::{
+        commerce::CommerceStore as _, identity::IdentityStore as _,
+        identity_lifecycle::IdentityLifecycleStore as _,
+    },
 };
 use ovload_core::{
     access::{AccessSessionId, ManagementPrincipalId, TenantId},
     engine::authentication::model_key_digest,
 };
-use ovload_store::postgres::{PgIdentityLifecycleStore, PgIdentityStore};
+use ovload_store::postgres::{PgCommerceStore, PgIdentityLifecycleStore, PgIdentityStore};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -110,6 +114,79 @@ fn query() -> CustomerDirectoryQuery {
         sort: CustomerDirectorySort::DisplayName,
         descending: false,
     }
+}
+
+#[tokio::test]
+async fn revoke_subscription_for_suspended_customer_preserves_revision_check() {
+    let Some(db) = TestDatabase::create("subscription_revoke").await else {
+        return;
+    };
+    let identity = PgIdentityStore::new(db.pool.clone());
+    let commerce = PgCommerceStore::new(db.pool.clone());
+    let admin = operator(
+        &db.pool,
+        None,
+        vec!["identity.users.manage", "billing.manage"],
+    )
+    .await;
+    let user = customer(&identity, admin, "Suspended").await;
+    let plan = Uuid::now_v7();
+    let subscription = Uuid::now_v7();
+    sqlx::query("insert into commerce_plans(id,document) values($1,'{}')")
+        .bind(plan)
+        .execute(&db.pool)
+        .await
+        .expect("seed subscription plan");
+    sqlx::query(
+        "insert into commerce_subscriptions(id,tenant_id,user_id,plan_id,plan,ends_at)
+         values($1,$2,$3,$4,'{}',now()+interval '1 day')",
+    )
+    .bind(subscription)
+    .bind(user.tenant_id.as_uuid())
+    .bind(user.id.as_uuid())
+    .bind(plan)
+    .execute(&db.pool)
+    .await
+    .expect("seed active subscription");
+    identity
+        .set_customer_active(
+            admin,
+            SetCustomerActive {
+                tenant_id: user.tenant_id,
+                user_id: user.id,
+                expected_revision: 1,
+                active: false,
+            },
+        )
+        .await
+        .expect("suspend customer");
+    let session = IdentitySession {
+        id: admin.session_id,
+        owner: IdentityOwner::Management(admin.principal_id),
+        authority_generation: admin.authority_generation,
+        expires_at: Utc::now() + Duration::hours(1),
+    };
+    let revoke = |revision| CommerceCommand::Revoke {
+        id: subscription,
+        revision,
+    };
+    assert!(matches!(
+        commerce.execute(&session, "stale".into(), revoke(2)).await,
+        Err(IdentityError::Conflict)
+    ));
+    commerce
+        .execute(&session, "revoke".into(), revoke(1))
+        .await
+        .expect("revoke suspended customer's subscription");
+    let state: (bool, i64, i64) = sqlx::query_as(
+        "select revoked,revision,quota_generation from commerce_subscriptions where id=$1",
+    )
+    .bind(subscription)
+    .fetch_one(&db.pool)
+    .await
+    .expect("read revoked subscription");
+    assert_eq!(state, (true, 2, 1));
+    db.close().await;
 }
 
 #[tokio::test]
@@ -427,5 +504,183 @@ async fn profile_email_password_notes_and_limits_commit_together_and_revoke_prio
             .await
             .expect("durable authority generation");
     assert_eq!(generation, 2);
+    db.close().await;
+}
+
+#[tokio::test]
+async fn management_sessions_can_exceed_ten_and_honor_idle_timeout() {
+    let Some(db) = TestDatabase::create("management_session_policy").await else {
+        return;
+    };
+    let identities = PgIdentityStore::new(db.pool.clone());
+    let profiles = PgIdentityLifecycleStore::new(db.pool.clone());
+    let admin = operator(&db.pool, None, vec!["security.settings.manage"]).await;
+    let owner = IdentityOwner::Management(admin.principal_id);
+    let expires_at = Utc::now() + Duration::hours(1);
+    for _ in 0..10 {
+        let id = Uuid::now_v7();
+        identities
+            .create_session(NewIdentitySession {
+                session: IdentitySession {
+                    id: id.into(),
+                    owner,
+                    authority_generation: 1,
+                    expires_at,
+                },
+                access_digest: model_key_digest(&format!("fixture-access-{id}")),
+                csrf_digest: model_key_digest(&format!("fixture-csrf-{id}")),
+                previous_session: None,
+                consent_revision: None,
+            })
+            .await
+            .expect("permit independent management sessions");
+    }
+
+    let access = model_key_digest(&format!("fixture-access-{}", admin.session_id.as_uuid()));
+    let last_seen = Utc::now() - Duration::hours(2);
+    let seed_last_seen = || {
+        sqlx::query_scalar::<_, chrono::DateTime<Utc>>(
+            "update identity_sessions set last_seen_at=$2 where id=$1 returning last_seen_at",
+        )
+        .bind(admin.session_id.as_uuid())
+        .bind(last_seen)
+        .fetch_one(&db.pool)
+    };
+    let last_seen = seed_last_seen().await.expect("seed old activity");
+    let session = identities
+        .session(IdentityAudience::Management, access)
+        .await
+        .expect("validate idle session with timeout off")
+        .expect("session is valid");
+    let actual: chrono::DateTime<Utc> =
+        sqlx::query_scalar("select last_seen_at from identity_sessions where id=$1")
+            .bind(admin.session_id.as_uuid())
+            .fetch_one(&db.pool)
+            .await
+            .expect("read session activity");
+    assert_eq!(actual, last_seen);
+
+    let mut document = profiles
+        .security_document(Some(&session))
+        .await
+        .expect("load authentication settings");
+    document.policy.access_token_minutes = 1;
+    profiles
+        .save_security(&session, document)
+        .await
+        .expect("enable idle timeout");
+    assert!(
+        identities
+            .session(IdentityAudience::Management, access)
+            .await
+            .expect("validate using activation baseline")
+            .is_some()
+    );
+    seed_last_seen().await.expect("age session activity");
+    sqlx::query("update authentication_security set idle_timeout_enabled_at=$1")
+        .bind(last_seen)
+        .execute(&db.pool)
+        .await
+        .expect("age timeout activation");
+    assert!(
+        identities
+            .session(IdentityAudience::Management, access)
+            .await
+            .expect("check expired idle session")
+            .is_none()
+    );
+    db.close().await;
+}
+
+#[tokio::test]
+async fn quota_edits_and_redemption_keep_customer_sessions() {
+    let Some(db) = TestDatabase::create("customer_quota_sessions").await else {
+        return;
+    };
+    let identities = PgIdentityStore::new(db.pool.clone());
+    let profiles = PgIdentityLifecycleStore::new(db.pool.clone());
+    let commerce = PgCommerceStore::new(db.pool.clone());
+    let admin = operator(&db.pool, None, vec!["identity.users.manage"]).await;
+    let customer = customer(&identities, admin, "Quota").await;
+    let owner = IdentityOwner::Customer {
+        tenant_id: customer.tenant_id,
+        user_id: customer.id,
+    };
+    let mut sessions = Vec::new();
+    for _ in 0..2 {
+        let id = Uuid::now_v7();
+        let session = IdentitySession {
+            id: id.into(),
+            owner,
+            authority_generation: 1,
+            expires_at: Utc::now() + Duration::hours(1),
+        };
+        let digest = model_key_digest(&format!("fixture-access-{id}"));
+        identities
+            .create_session(NewIdentitySession {
+                session: session.clone(),
+                access_digest: digest,
+                csrf_digest: model_key_digest(&format!("fixture-csrf-{id}")),
+                previous_session: None,
+                consent_revision: None,
+            })
+            .await
+            .expect("open customer browser session");
+        sessions.push((session, digest));
+    }
+    profiles
+        .update_customer(
+            admin,
+            PreparedCustomerAccountUpdate {
+                changes: CustomerAccountChanges {
+                    tenant_id: customer.tenant_id,
+                    user_id: customer.id,
+                    expected_revision: 1,
+                    email: customer.email,
+                    display_name: customer.display_name,
+                    max_concurrency: 13,
+                    requests_per_minute: 137,
+                    notes: "Internal fixture note".into(),
+                },
+                password_hash: None,
+            },
+        )
+        .await
+        .expect("update customer quotas");
+    let code = "SYNTHETIC-CONCURRENCY-CODE";
+    sqlx::query(
+        "insert into commerce_codes(id,code,kind,value,max_uses,per_user) values($1,$2,'concurrency',2,1,1)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(code)
+    .execute(&db.pool)
+    .await
+    .expect("seed concurrency code");
+    commerce
+        .execute(
+            &sessions[0].0,
+            "quota-redemption".into(),
+            CommerceCommand::Redeem { code: code.into() },
+        )
+        .await
+        .expect("redeem concurrency on original session");
+    for (_, digest) in sessions {
+        assert!(
+            identities
+                .session(IdentityAudience::Customer, digest)
+                .await
+                .expect("validate session after quota changes")
+                .is_some()
+        );
+    }
+    let quotas: (i64, i64, i64, i64) = sqlx::query_as(
+        "select max_concurrency,requests_per_minute,authority_generation,limits_revision
+         from identity_users where id=$1",
+    )
+    .bind(customer.id.as_uuid())
+    .fetch_one(&db.pool)
+    .await
+    .expect("read quota and credential generations");
+    assert_eq!(quotas, (15, 137, 1, 2));
     db.close().await;
 }

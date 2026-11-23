@@ -138,10 +138,19 @@ impl PublicApiAccountScheduler {
             context.request_id().to_string(),
             serde_json::json!({"layer":"account"}),
         );
+        let account_ids = match context.required_account() {
+            Some(account) => vec![account.clone()],
+            None => request
+                .candidate()
+                .account_scope()
+                .account_ids_for_model(&self.provider.kind, model.as_str())
+                .cloned()
+                .collect(),
+        };
         'refresh: loop {
             let mut accounts = Vec::new();
             let mut refresh_failure = None;
-            for account in self.provider.accounts().await? {
+            for account in self.provider.accounts(Some(&account_ids)).await? {
                 if context
                     .required_account()
                     .is_some_and(|required| required != account.id())

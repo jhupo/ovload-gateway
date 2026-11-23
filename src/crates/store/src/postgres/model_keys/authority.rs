@@ -92,7 +92,7 @@ async fn lock_identity(
         .map_err(unavailable)?;
     let row = sqlx::query(
             "select k.id,k.tenant_id,k.user_id,k.authority_generation as key_generation,
-                    u.authority_generation as user_generation,t.revision as tenant_generation
+                    u.authority_generation+u.limits_revision as user_generation,t.revision as tenant_generation
              from client_api_keys k
              join identity_users u on u.tenant_id=k.tenant_id and u.id=k.user_id and u.status='active'
              join identity_tenants t on t.id=k.tenant_id and t.status='active'

@@ -1,5 +1,4 @@
 import i18n from '@/i18n'
-import { ensureStepUp } from './step-up'
 import { sessionPort } from './session-port'
 import { ApiError } from './errors'
 import { transportRequest } from './transport'
@@ -29,10 +28,6 @@ export async function testAccountConnection(
       'identity.unauthorized',
       i18n.t('upstreamAccounts.sessionChanged')
     )
-  await ensureStepUp()
-  signal.throwIfAborted()
-  if (sessionPort().getSession()?.id !== session.id)
-    throw new Error(i18n.t('upstreamAccounts.sessionChanged'))
   const response = await transportRequest({
     audience: 'platform',
     path: '/accounts/connection-test',
@@ -46,7 +41,6 @@ export async function testAccountConnection(
     accept: 'text/event-stream',
     signal,
     timeoutMs: 600000,
-    skipStepUp: true,
   })
   if (response.status === 401)
     sessionPort().invalidateSession(session.id)

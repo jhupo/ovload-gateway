@@ -401,6 +401,16 @@ impl AdminError {
         Self::new(StatusCode::FORBIDDEN, AdminErrorCode::FORBIDDEN, "无权访问")
     }
 
+    pub(crate) fn step_up_required() -> Self {
+        Self::new_with_metadata(
+            StatusCode::FORBIDDEN,
+            AdminErrorCode::FORBIDDEN,
+            "identity.step_up_required",
+            serde_json::Value::Null,
+            "Security verification is required",
+        )
+    }
+
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(StatusCode::CONFLICT, AdminErrorCode::CONFLICT, message)
     }

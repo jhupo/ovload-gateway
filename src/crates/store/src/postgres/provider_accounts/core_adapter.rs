@@ -68,7 +68,7 @@ impl ProviderAccountStore for PgProviderAccountRepository {
     }
 
     async fn list_accounts(&self) -> Result<Vec<CoreProviderAccount>, CoreStoreError> {
-        self.list_provider_accounts(None, true)
+        self.list_provider_accounts(None, true, None)
             .await
             .map_err(core_store_error)?
             .into_iter()
@@ -79,8 +79,14 @@ impl ProviderAccountStore for PgProviderAccountRepository {
     async fn list_for_provider(
         &self,
         provider: &ProviderKind,
+        account_ids: Option<&[CoreProviderAccountId]>,
     ) -> Result<Vec<CoreProviderAccount>, CoreStoreError> {
-        self.list_provider_accounts(Some(provider.as_str()), false)
+        let ids = account_ids.map(|ids| {
+            ids.iter()
+                .map(|id| id.as_str().to_owned())
+                .collect::<Vec<_>>()
+        });
+        self.list_provider_accounts(Some(provider.as_str()), false, ids)
             .await
             .map_err(core_store_error)?
             .into_iter()

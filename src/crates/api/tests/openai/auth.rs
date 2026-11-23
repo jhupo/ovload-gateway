@@ -8,12 +8,12 @@ use std::sync::{
 };
 
 use axum::http::{
-    HeaderMap, HeaderValue, Method, StatusCode,
+    HeaderValue, Method, StatusCode,
     header::{self, AUTHORIZATION},
 };
 use futures::future::BoxFuture;
 
-use ovload_api::openai::auth::{ClientApiKeyAuthError, identify_codex_client};
+use ovload_api::openai::auth::ClientApiKeyAuthError;
 use ovload_core::{
     engine::{
         authentication::ClientAuthenticationRequest,
@@ -23,7 +23,6 @@ use ovload_core::{
         },
     },
     error::{GatewayError, GatewayErrorKind},
-    policy::CodexClientKind,
     routing::PublicModelId,
 };
 use tower::ServiceExt as _;
@@ -206,169 +205,6 @@ fn client_auth_failure_reasons_should_be_stable_and_secret_free() {
     );
 }
 
-#[test]
-fn desktop_headers_should_take_precedence_over_embedded_cli_marker() {
-    let mut headers = HeaderMap::new();
-    headers.insert("originator", HeaderValue::from_static("Codex Desktop"));
-    headers.insert("version", HeaderValue::from_static("26.825.6671"));
-    headers.insert(
-        "user-agent",
-        HeaderValue::from_static("codex_cli_rs/0.39.0 terminal (Codex Desktop; 26.1.0)"),
-    );
-
-    let identified = identify_codex_client(&headers).expect("recognized desktop");
-
-    assert_eq!(identified.kind(), CodexClientKind::Desktop);
-    assert_eq!(
-        identified.version().map(ToString::to_string).as_deref(),
-        Some("26.825.6671")
-    );
-}
-
-#[test]
-fn cli_user_agent_should_expose_semver_or_recognized_missing_version() {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "user-agent",
-        HeaderValue::from_static("codex_cli_rs/0.39.0 (Linux; x86_64)"),
-    );
-    let identified = identify_codex_client(&headers).expect("recognized CLI");
-    assert_eq!(identified.kind(), CodexClientKind::Cli);
-    assert_eq!(
-        identified.version().map(ToString::to_string).as_deref(),
-        Some("0.39.0")
-    );
-
-    headers.insert(
-        "user-agent",
-        HeaderValue::from_static("codex-cli/not-a-version"),
-    );
-    assert!(
-        identify_codex_client(&headers)
-            .expect("recognized invalid CLI")
-            .version()
-            .is_none()
-    );
-}
-
-#[test]
-fn chatgpt_remote_desktop_without_app_version_should_not_use_a_version_gate() {
-    for name in [
-        "codex_chatgpt_android_remote",
-        "codex_chatgpt_ios_remote",
-        "codex_chatgpt_future_os_remote",
-    ] {
-        for remote_version in ["dev", "1.2.3"] {
-            for (product, originator) in [
-                ("Codex Desktop", None),
-                ("codex_cli_rs", Some("Codex Desktop")),
-            ] {
-                let mut headers = HeaderMap::new();
-                headers.insert(
-                    "user-agent",
-                    HeaderValue::from_str(&format!(
-                        "{product}/0.154.0-alpha.6.2 (Windows 10.0.26200; x86_64) unknown ({name}; {remote_version})"
-                    ))
-                    .unwrap(),
-                );
-                if let Some(originator) = originator {
-                    headers.insert("originator", HeaderValue::from_static(originator));
-                }
-                assert_eq!(identify_codex_client(&headers), None, "{headers:?}");
-            }
-        }
-    }
-}
-
-#[test]
-fn chatgpt_remote_marker_should_require_a_complete_exact_client_suffix() {
-    for suffix in [
-        "(codex_chatgpt_android_remote_extra; dev)",
-        "(unofficial_codex_chatgpt_ios_remote; dev)",
-        "(codex_chatgpt__remote; dev)",
-        "(codex_chatgpt_remote; dev)",
-        "(codex_chatgpt_future os_remote; dev)",
-        "(codex_chatgpt_future;os_remote; dev)",
-        "codex_chatgpt_android_remote; dev",
-        "(codex_chatgpt_android_remote; dev",
-        "(codex_chatgpt_android_remote; dev) trailing",
-        "(codex_chatgpt_android_remote; dev) (another_client; dev)",
-        "(codex_chatgpt_android_remote; )",
-        "(another_client; codex_chatgpt_android_remote)",
-        "(Codex Desktop; dev)",
-        "(Codex Desktop; ) (codex_chatgpt_android_remote; dev)",
-        "(Codex Desktop; invalid) (codex_chatgpt_ios_remote; dev)",
-        "(Codex Desktop)",
-    ] {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "user-agent",
-            HeaderValue::from_str(&format!("Codex Desktop/0.154.0-alpha.6.2 {suffix}")).unwrap(),
-        );
-        let client = identify_codex_client(&headers).expect("Desktop still requires a version");
-        assert_eq!(client.kind(), CodexClientKind::Desktop, "{suffix}");
-        assert!(client.version().is_none(), "{suffix}");
-    }
-}
-
-#[test]
-fn chatgpt_remote_desktop_should_preserve_explicit_version_validation() {
-    for (value, expected) in [
-        (
-            HeaderValue::from_static("26.908.70816"),
-            Some("26.908.70816"),
-        ),
-        (HeaderValue::from_static("26.1.0"), Some("26.1.0")),
-        (HeaderValue::from_static("dev"), None),
-        (HeaderValue::from_static(""), None),
-        (HeaderValue::from_bytes(&[0xff]).unwrap(), None),
-    ] {
-        let mut headers = HeaderMap::new();
-        headers.insert("version", value);
-        headers.insert(
-            "user-agent",
-            HeaderValue::from_static(
-                "Codex Desktop/0.154.0-alpha.6.2 (codex_chatgpt_android_remote; dev)",
-            ),
-        );
-        let client = identify_codex_client(&headers).expect("explicit Desktop version");
-        assert_eq!(client.kind(), CodexClientKind::Desktop);
-        assert_eq!(
-            client.version().map(ToString::to_string).as_deref(),
-            expected
-        );
-    }
-}
-
-#[test]
-fn chatgpt_remote_marker_should_not_override_an_existing_desktop_version_suffix() {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        "user-agent",
-        HeaderValue::from_static(
-            "Codex Desktop/0.154.0-alpha.6.2 (Codex Desktop; 26.1.0) (codex_chatgpt_ios_remote; dev)",
-        ),
-    );
-    let client = identify_codex_client(&headers).expect("Desktop version remains available");
-    assert_eq!(client.version().unwrap().to_string(), "26.1.0");
-}
-
-#[test]
-fn chatgpt_remote_suffix_created_by_header_truncation_should_not_skip_the_gate() {
-    let suffix = " (codex_chatgpt_android_remote; dev)";
-    let mut user_agent = "Codex Desktop/0.154.0-alpha.6.2 ".to_owned();
-    user_agent.push_str(&"x".repeat(4096 - user_agent.len() - suffix.len()));
-    user_agent.push_str(suffix);
-    user_agent.push_str(" (another_client; dev)");
-    let mut headers = HeaderMap::new();
-    headers.insert("user-agent", HeaderValue::from_str(&user_agent).unwrap());
-
-    let client =
-        identify_codex_client(&headers).expect("incomplete headers still require a version");
-    assert_eq!(client.kind(), CodexClientKind::Desktop);
-    assert!(client.version().is_none());
-}
-
 #[tokio::test]
 async fn http_settings_freeze_before_plan_resolution_and_apply_before_admission() {
     use ovload_core::engine::middleware::http as contract;
@@ -525,7 +361,12 @@ async fn http_settings_freeze_before_plan_resolution_and_apply_before_admission(
         .unwrap();
     assert_eq!(
         response.status(),
-        StatusCode::UPGRADE_REQUIRED,
+        StatusCode::BAD_REQUEST
+    );
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        body["error"]["code"], "request_too_large",
         "request changes must not alter the published baseline"
     );
     assert_eq!(

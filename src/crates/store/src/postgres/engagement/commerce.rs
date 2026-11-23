@@ -211,10 +211,46 @@ pub(super) async fn command(
             changed(sqlx::query("update commerce_subscriptions set ends_at=$3,notes=$4,revision=revision+1 where id=$1 and revision=$2 and not revoked").bind(id).bind(revision).bind(ends_at).bind(notes).execute(&mut **tx).await.map_err(db_error)?.rows_affected())?;
             json!({"id":id})
         }
-        CommerceCommand::Revoke { id, revision } | CommerceCommand::ResetQuota { id, revision } => {
+        CommerceCommand::Revoke { id, revision } => {
+            let rows = sqlx::query(
+                "update commerce_subscriptions set revoked=true,revision=revision+1
+                 where id=$1 and revision=$2 and not revoked",
+            )
+            .bind(id)
+            .bind(revision)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_error)?
+            .rows_affected();
+            if rows == 0 {
+                let exists: bool = sqlx::query_scalar(
+                    "select exists(select 1 from commerce_subscriptions where id=$1)",
+                )
+                .bind(id)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(db_error)?;
+                return Err(if exists {
+                    IdentityError::Conflict
+                } else {
+                    IdentityError::NotFound
+                });
+            }
+            json!({"id":id})
+        }
+        CommerceCommand::ResetQuota { id, revision } => {
             lock_subscription(tx, id).await?;
-            let revoke = request["action"] == "revoke";
-            changed(sqlx::query("update commerce_subscriptions set revoked=revoked or $3,quota_generation=quota_generation+case when $3 then 0 else 1 end,revision=revision+1 where id=$1 and revision=$2 and not revoked").bind(id).bind(revision).bind(revoke).execute(&mut **tx).await.map_err(db_error)?.rows_affected())?;
+            let rows = sqlx::query(
+                "update commerce_subscriptions set quota_generation=quota_generation+1,
+                 revision=revision+1 where id=$1 and revision=$2 and not revoked",
+            )
+            .bind(id)
+            .bind(revision)
+            .execute(&mut **tx)
+            .await
+            .map_err(db_error)?
+            .rows_affected();
+            changed(rows)?;
             json!({"id":id})
         }
         CommerceCommand::Generate {
@@ -306,9 +342,7 @@ pub(super) async fn command(
                 .await?;
             }
             if kind == "concurrency" {
-                changed(sqlx::query("update identity_users set max_concurrency=max_concurrency+$2,revision=revision+1,authority_generation=authority_generation+1 where id=$1 and max_concurrency+$2<=100000").bind(user).bind(value).execute(&mut **tx).await.map_err(db_error)?.rows_affected())?;
-                // Limit changes fence existing API credentials; renew this browser's authority.
-                sqlx::query("update identity_sessions set authority_generation=(select authority_generation from identity_users where id=$2) where id=$1").bind(session.id.as_uuid()).bind(user).execute(&mut **tx).await.map_err(db_error)?;
+                changed(sqlx::query("update identity_users set max_concurrency=max_concurrency+$2,revision=revision+1 where id=$1 and max_concurrency+$2<=100000").bind(user).bind(value).execute(&mut **tx).await.map_err(db_error)?.rows_affected())?;
                 sqlx::query("update identity_tenants set max_concurrency=greatest(max_concurrency,(select max_concurrency from identity_users where id=$2)),revision=revision+1 where id=$1").bind(tenant).bind(user).execute(&mut **tx).await.map_err(db_error)?;
             }
             json!({"id":redemption,"type":kind,"value":value})

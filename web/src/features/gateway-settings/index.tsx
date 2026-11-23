@@ -207,9 +207,7 @@ function GatewaySettingsPage({ canManage }: { canManage: boolean }) {
           ? numericFields[field as NumericField]
           : undefined
       toast.error(
-        range ||
-          issues[field] === 'versionError' ||
-          issues[field] === 'modelError'
+        range || issues[field] === 'modelError'
           ? t('realGatewaySettings.' + issues[field], {
               field: real(field),
               min: range?.min,

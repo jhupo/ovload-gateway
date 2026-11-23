@@ -470,32 +470,6 @@ function SubscriptionWorkspace({
       cell: ({ row }) => planActions(row.original),
     },
   ]
-  const recordStatuses = useClockValue((now) =>
-    status === 'all' ? '' : records.map((row) => statusOf(row, now)).join('|')
-  )
-  const filteredRecords = useMemo(
-    () =>
-      records.filter((row, index) => {
-        const user = users.find((u) => u.id === row.userId)
-        return (
-          (status === 'all' || recordStatuses.split('|')[index] === status) &&
-          (planFilter === 'all' || row.plan.id === planFilter) &&
-          `${user?.username} ${user?.email} ${row.notes}`
-            .toLowerCase()
-            .includes(query.trim().toLowerCase())
-        )
-      }),
-    [records, users, status, planFilter, query, recordStatuses]
-  )
-  const filteredPlans = useMemo(
-    () =>
-      [...plans].filter(
-        (p) =>
-          p.name.toLowerCase().includes(query.trim().toLowerCase()) &&
-          (status === 'all' || p.published === (status === 'published'))
-      ),
-    [plans, query, status]
-  )
   const filterPlans = useMemo(
     () => [
       ...new Map(
@@ -604,7 +578,7 @@ function SubscriptionWorkspace({
               <DataTableFrame
                 server={tableState}
                 toolbar={tableFilters}
-                data={filteredRecords}
+                data={records}
                 columns={subscriptionColumns}
                 label={t('subscriptions.userSubscriptions')}
                 mobile={(row) => (
@@ -641,7 +615,7 @@ function SubscriptionWorkspace({
               <DataTableFrame
                 server={tableState}
                 toolbar={tableFilters}
-                data={filteredPlans}
+                data={plans}
                 columns={planColumns}
                 label={t('subscriptions.plans')}
                 mobile={(p) => (

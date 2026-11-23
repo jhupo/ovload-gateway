@@ -39,8 +39,6 @@ export const numericFields = {
 } as const
 export type NumericField = keyof typeof numericFields
 export const textFields = [
-  'minCodexDesktopVersion',
-  'minCodexCliVersion',
   'accountAutoFreezeProbeModel',
   'accountWarmupModel',
   'accountWarmupScheduleTime',
@@ -99,8 +97,6 @@ export function gatewayDraft(snapshot: GatewaySettingsSnapshot): GatewayDraft {
     openaiSessionAffinityTtlHours: String(
       snapshot.openaiSessionAffinityTtlHours
     ),
-    minCodexDesktopVersion: snapshot.minCodexDesktopVersion ?? '',
-    minCodexCliVersion: snapshot.minCodexCliVersion ?? '',
     accountAutoFreezeProbeModel: snapshot.accountAutoFreezeProbeModel ?? '',
     accountWarmupModel: snapshot.accountWarmupModel ?? '',
     resetCreditLeadMinutes: String(snapshot.resetCreditLeadMinutes),
@@ -110,9 +106,6 @@ export function gatewayDraft(snapshot: GatewaySettingsSnapshot): GatewayDraft {
         : String(snapshot.resetCreditMaxWeeklyRemainingPercent),
   }
 }
-
-const semver =
-  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
 function hasControlCharacters(value: string): boolean {
   for (const character of value) {
@@ -137,11 +130,6 @@ export function gatewayErrors(
       value > max
     )
       errors[key] = 'numberError'
-  }
-  for (const key of ['minCodexDesktopVersion', 'minCodexCliVersion'] as const) {
-    const value = draft[key]
-    if (value && (value.length > 64 || !semver.test(value)))
-      errors[key] = 'versionError'
   }
   for (const key of [
     'accountAutoFreezeProbeModel',
@@ -261,8 +249,6 @@ export function gatewayReplacement(
       draft.openaiGuardianReservedConcurrency
     ),
     openaiSessionAffinityTtlHours: Number(draft.openaiSessionAffinityTtlHours),
-    minCodexDesktopVersion: draft.minCodexDesktopVersion || null,
-    minCodexCliVersion: draft.minCodexCliVersion || null,
     accountAutoFreezeProbeModel: draft.accountAutoFreezeProbeModel || null,
     accountWarmupModel: draft.accountWarmupModel || null,
     resetCreditLeadMinutes: Number(draft.resetCreditLeadMinutes),

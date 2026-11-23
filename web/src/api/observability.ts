@@ -360,7 +360,6 @@ async function exportDiagnostics(
     accept: 'application/zip',
     signal,
     timeoutMs: 15_000,
-    skipStepUp: true,
   })
   if (response.status === 401)
     sessionPort().invalidateSession(session.id)

@@ -56,7 +56,6 @@ export async function platformRequest<T>(
     body: options.body,
     signal: options.signal,
     timeoutMs: options.timeoutMs,
-    skipStepUp: true,
   })
   return parsePlatformResponse<T>(response, session?.id)
 }

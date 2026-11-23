@@ -136,7 +136,7 @@ impl CodexCredentialRepository {
             CredentialRepositoryError::InvalidCredentialData(Some(ErrorSource::new(source)))
         })?;
         self.store
-            .list_for_provider(&provider)
+            .list_for_provider(&provider, None)
             .await
             .map_err(Into::into)
     }

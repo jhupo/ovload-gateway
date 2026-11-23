@@ -34,6 +34,10 @@ impl IdentityHttpError {
         &self.error
     }
 
+    pub(crate) fn requires_step_up(&self) -> bool {
+        self.step_up
+    }
+
     pub fn step_up(request_id: String) -> Self {
         Self {
             error: IdentityError::Forbidden,

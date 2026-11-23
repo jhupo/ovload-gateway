@@ -2857,19 +2857,14 @@ struct SessionExecution {
 }
 
 #[tokio::test]
-async fn chatgpt_remote_responses_should_only_skip_missing_desktop_versions() {
+async fn chatgpt_remote_responses_should_ignore_configured_minimum_versions() {
     let admin = crate::admin::AdminTestFixture::new().await.services;
     for name in [
         "codex_chatgpt_android_remote",
         "codex_chatgpt_ios_remote",
         "codex_chatgpt_future_os_remote",
     ] {
-        for (version, expected_code) in [
-            (None, None),
-            (Some("26.908.70816"), None),
-            (Some("26.1.0"), Some("client_version_too_old")),
-            (Some("dev"), Some("client_version_unavailable")),
-        ] {
+        for version in [None, Some("26.908.70816"), Some("26.1.0"), Some("dev")] {
             let trace = Arc::new(Trace::default());
             let execution = Arc::new(SessionExecution {
                 client: authenticated_client_with_min_versions(
@@ -2914,18 +2909,11 @@ async fn chatgpt_remote_responses_should_only_skip_missing_desktop_versions() {
             .unwrap();
             let status = response.status();
             let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-            if let Some(code) = expected_code {
-                let value: Value = serde_json::from_slice(&body).unwrap();
-                assert_eq!(status, StatusCode::UPGRADE_REQUIRED, "{name} {version:?}");
-                assert_eq!(value["error"]["code"], code);
-                assert!(execution.session.lock().unwrap().is_some());
-            } else {
-                assert_eq!(status, StatusCode::OK, "{name} {version:?}");
-                let body = String::from_utf8(body.to_vec()).unwrap();
-                assert!(body.contains("event: response.completed\n"));
-                assert!(body.ends_with("data: [DONE]\n\n"));
-                assert!(trace.snapshot().contains(&"commit"));
-            }
+            assert_eq!(status, StatusCode::OK, "{name} {version:?}");
+            let body = String::from_utf8(body.to_vec()).unwrap();
+            assert!(body.contains("event: response.completed\n"));
+            assert!(body.ends_with("data: [DONE]\n\n"));
+            assert!(trace.snapshot().contains(&"commit"));
         }
     }
 }

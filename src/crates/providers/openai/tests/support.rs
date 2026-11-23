@@ -288,6 +288,7 @@ impl ProviderAccountStore for MemoryAccountStore {
     async fn list_for_provider(
         &self,
         provider: &ProviderKind,
+        account_ids: Option<&[ProviderAccountId]>,
     ) -> Result<Vec<ProviderAccount>, StoreError> {
         if self.fail_provider_listing.load(Ordering::SeqCst) {
             return Err(StoreError::caused_by(
@@ -304,7 +305,11 @@ impl ProviderAccountStore for MemoryAccountStore {
             .lock()
             .expect("account store lock")
             .values()
-            .filter(|stored| stored.account.provider() == provider && stored.account.enabled())
+            .filter(|stored| {
+                stored.account.provider() == provider
+                    && stored.account.enabled()
+                    && account_ids.is_none_or(|ids| ids.contains(stored.account.id()))
+            })
             .map(|stored| stored.account.clone())
             .collect())
     }

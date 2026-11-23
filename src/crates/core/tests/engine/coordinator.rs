@@ -1249,7 +1249,7 @@ fn plan_with_profiles(
 
 /// 双 Provider 路由计划：候选顺序为 openai、xai，不锁定 required_provider，
 /// 用于验证跨 Provider 候选推进受换号预算约束。
-fn dual_provider_plan(operation: &Operation) -> RoutingPlan {
+fn dual_provider_plan(operation: &Operation, max_account_rotations: u32) -> RoutingPlan {
     let openai = ProviderKind::new("openai").expect("provider");
     let xai = ProviderKind::new("xai").expect("provider");
     let public_model = PublicModelId::new("gpt-5").expect("public model");
@@ -1273,7 +1273,8 @@ fn dual_provider_plan(operation: &Operation) -> RoutingPlan {
     let directory = Arc::new(RuntimeAccountDirectory::new(entries));
     let snapshot = RuntimeSnapshot::new(
         ConfigRevision::new(1).expect("config revision"),
-        ovload_core::settings::SettingsValues::new(2, "smart", Default::default(), None, None),
+        ovload_core::settings::SettingsValues::new(2, "smart", Default::default(), None, None)
+            .with_max_account_rotations(max_account_rotations),
         vec![openai.clone(), xai.clone()],
         vec![
             ProviderModel::new(
@@ -7292,7 +7293,7 @@ fn provider_candidate_advance_stops_at_the_account_rotation_budget() {
     // openai 上第三次换号耗尽预算后，空选路不再推进到 xai
     // 沿用容量失败的原有终态语义，返回最后一个可重试上游错误
     let operation = generate_operation();
-    let route_plan = dual_provider_plan(&operation);
+    let route_plan = dual_provider_plan(&operation, 3);
     let store = Arc::new(FakeStore::default());
     let openai = Arc::new(ScriptedProvider::new(vec![
         Script::Stream {
@@ -7396,7 +7397,7 @@ fn prepare_failure_can_forbid_provider_fallback_without_affecting_ordinary_empty
         (ProviderErrorKind::SessionPolicyRestricted, true, false),
     ] {
         let operation = generate_operation();
-        let route_plan = dual_provider_plan(&operation);
+        let route_plan = dual_provider_plan(&operation, 0);
         let mut error = ProviderError::new(kind, UpstreamSendState::NotSent);
         if prohibited {
             error = error.with_retry_prohibited();

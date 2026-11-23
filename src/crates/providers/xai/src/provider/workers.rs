@@ -148,7 +148,7 @@ impl ScheduledTask for XaiQuotaCatalogTask {
         Box::pin(async move {
             let accounts = self
                 .accounts
-                .list_for_provider(&self.provider_kind)
+                .list_for_provider(&self.provider_kind, None)
                 .await
                 .map_err(|source| {
                     WorkerTaskError::safe("xAI Provider accounts unavailable").with_source(source)

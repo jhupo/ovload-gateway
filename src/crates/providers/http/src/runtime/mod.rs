@@ -41,7 +41,7 @@ use tokio::sync::{Mutex, Semaphore};
 
 use provider_adapter::ProviderAdapter;
 
-const MAX_ACCOUNTS: usize = 2_048;
+const MAX_CACHED_CATALOGS: usize = 2_048;
 const MAX_MODELS: usize = 2_048;
 
 pub struct HttpProviderBundle {
@@ -192,25 +192,20 @@ impl PublicApiProvider {
             })
     }
 
-    async fn accounts(&self) -> Result<Vec<ProviderAccount>, ProviderError> {
-        let accounts = self
-            .ports
+    async fn accounts(
+        &self,
+        account_ids: Option<&[ProviderAccountId]>,
+    ) -> Result<Vec<ProviderAccount>, ProviderError> {
+        self.ports
             .accounts()
-            .list_for_provider(&self.kind)
+            .list_for_provider(&self.kind, account_ids)
             .await
             .map_err(|_| {
                 error(
                     ProviderErrorKind::ProviderInfrastructureUnavailable,
                     UpstreamSendState::NotSent,
                 )
-            })?;
-        if accounts.len() > MAX_ACCOUNTS {
-            return Err(error(
-                ProviderErrorKind::ProviderInfrastructureUnavailable,
-                UpstreamSendState::NotSent,
-            ));
-        }
-        Ok(accounts)
+            })
     }
 
     async fn catalog(
@@ -270,14 +265,17 @@ impl PublicApiProvider {
             expires_at: std::time::Instant::now() + std::time::Duration::from_secs(300),
         };
         let mut catalogs = self.catalogs.lock().await;
-        if catalogs.len() >= MAX_ACCOUNTS {
-            catalogs.retain(|_, item| item.expires_at > std::time::Instant::now());
-        }
-        if catalogs.len() >= MAX_ACCOUNTS && !catalogs.contains_key(account.id()) {
-            return Err(error(
-                ProviderErrorKind::ProviderInfrastructureUnavailable,
-                UpstreamSendState::NotSent,
-            ));
+        if catalogs.len() >= MAX_CACHED_CATALOGS && !catalogs.contains_key(account.id()) {
+            let now = std::time::Instant::now();
+            catalogs.retain(|_, item| item.expires_at > now);
+            if catalogs.len() >= MAX_CACHED_CATALOGS
+                && let Some(evict) = catalogs
+                    .iter()
+                    .min_by_key(|(_, item)| item.expires_at)
+                    .map(|(id, _)| id.clone())
+            {
+                catalogs.remove(&evict);
+            }
         }
         let changed = catalogs
             .get(account.id())
@@ -345,7 +343,7 @@ impl PublicApiProvider {
         let mut models =
             BTreeMap::<UpstreamModelId, std::collections::BTreeSet<ProviderAccountId>>::new();
         let accounts = self
-            .accounts()
+            .accounts(None)
             .await?
             .into_iter()
             .filter(|account| {

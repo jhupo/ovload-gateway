@@ -171,7 +171,7 @@ pub(crate) async fn get(
 ) -> Response {
     let client = match verify_client(state.openai(), &headers).await {
         Ok(client) => client,
-        Err(error) => return client_access_error_response(error.into()),
+        Err(error) => return client_access_error_response(error),
     };
     match state
         .admin_services()

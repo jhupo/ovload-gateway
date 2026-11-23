@@ -32,8 +32,6 @@ const snapshot: GatewaySettingsSnapshot = {
     resetWeight: 0,
     queueWeight: 0,
   },
-  minCodexDesktopVersion: null,
-  minCodexCliVersion: null,
   usageRetentionDays: 7,
   opsEventRetentionDays: 30,
   auditRetentionDays: 90,

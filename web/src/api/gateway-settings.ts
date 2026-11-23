@@ -65,8 +65,6 @@ export const gatewaySettingsSchema = z.object({
   providerRequestProfiles: z
     .record(z.string(), requestProfileSchema)
     .optional(),
-  minCodexDesktopVersion: z.string().nullable(),
-  minCodexCliVersion: z.string().nullable(),
   usageRetentionDays: u32.min(1).max(31),
   opsEventRetentionDays: u32.positive(),
   auditRetentionDays: u32.positive(),

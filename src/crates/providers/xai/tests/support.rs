@@ -343,6 +343,7 @@ impl ProviderAccountStore for MemoryProviderAccountStore {
     async fn list_for_provider(
         &self,
         provider: &ProviderKind,
+        account_ids: Option<&[ProviderAccountId]>,
     ) -> Result<Vec<ProviderAccount>, StoreError> {
         if self.fail_provider_listing.load(Ordering::SeqCst) {
             return Err(invalid());
@@ -350,7 +351,11 @@ impl ProviderAccountStore for MemoryProviderAccountStore {
         // 与 Postgres 实现的调度列表语义一致：停用账号不进入常规候选
         Ok(lock(&self.accounts)
             .values()
-            .filter(|stored| stored.account.provider() == provider && stored.account.enabled())
+            .filter(|stored| {
+                stored.account.provider() == provider
+                    && stored.account.enabled()
+                    && account_ids.is_none_or(|ids| ids.contains(stored.account.id()))
+            })
             .map(|stored| stored.account.clone())
             .collect())
     }

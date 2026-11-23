@@ -45,7 +45,7 @@ async fn usage(
 ) -> Response {
     let client = match verify_client(state.openai(), &headers).await {
         Ok(client) => client,
-        Err(error) => return client_access_error_response(error.into()),
+        Err(error) => return client_access_error_response(error),
     };
     plugin_middleware::query_response(
         state.openai().execution(),

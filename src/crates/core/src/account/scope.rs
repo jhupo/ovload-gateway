@@ -456,10 +456,23 @@ impl FrozenAccountScope {
     /// 目录按整个授权账号池过滤，不能只看用于获取元数据的账号政策
     #[must_use]
     pub fn allows_provider_model(&self, provider: &ProviderKind, upstream_model: &str) -> bool {
-        self.provider_kinds.contains(provider)
-            && self.directory.accounts.iter().any(|(id, account)| {
+        self.account_ids_for_model(provider, upstream_model)
+            .next()
+            .is_some()
+    }
+
+    pub fn account_ids_for_model<'a>(
+        &'a self,
+        provider: &'a ProviderKind,
+        upstream_model: &'a str,
+    ) -> impl Iterator<Item = &'a ProviderAccountId> {
+        self.directory
+            .accounts
+            .iter()
+            .filter(move |(id, account)| {
                 account.provider_kind() == provider && self.allows_model(id, upstream_model)
             })
+            .map(|(id, _)| id)
     }
 
     #[must_use]

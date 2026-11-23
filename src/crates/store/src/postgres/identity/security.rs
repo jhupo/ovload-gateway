@@ -59,8 +59,23 @@ pub(crate) async fn save(
     d.policy.validate()?;
     let mut tx = pool.begin().await.map_err(db_error)?;
     authorize(&mut tx, s).await?;
-    let changed=sqlx::query("update authentication_security set revision=revision+1,policy=$1,encrypted=$2 where singleton and revision=$3")
-        .bind(serde_json::to_value(d.policy).map_err(|_|IdentityError::Invalid)?).bind(d.encrypted).bind(generation(d.revision)?).execute(&mut *tx).await.map_err(db_error)?.rows_affected();
+    let idle_timeout_enabled = d.policy.access_token_minutes > 0;
+    let changed = sqlx::query(
+        "update authentication_security set revision=revision+1,policy=$1,encrypted=$2,
+         idle_timeout_enabled_at=case
+           when not $4 then null
+           when coalesce((policy->>'accessTokenMinutes')::int,0)=0 then clock_timestamp()
+           else idle_timeout_enabled_at end
+         where singleton and revision=$3",
+    )
+    .bind(serde_json::to_value(d.policy).map_err(|_| IdentityError::Invalid)?)
+    .bind(d.encrypted)
+    .bind(generation(d.revision)?)
+    .bind(idle_timeout_enabled)
+    .execute(&mut *tx)
+    .await
+    .map_err(db_error)?
+    .rows_affected();
     if changed != 1 {
         return Err(IdentityError::Conflict);
     }
